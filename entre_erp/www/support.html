@@ -1,0 +1,24 @@
+{% extends "entre_erp/templates/portal_base.html" %}
+
+{% block head %}
+<title>Support Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link
+    href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300..700;1,300..700&display=swap"
+    rel="stylesheet"
+/>
+<link rel="stylesheet" href="/assets/entre_erp/support/index.css" />
+{% endblock %}
+
+{% block body %}
+<div id="portal-root"></div>
+<script>
+    window.__portal_ctx__ = {
+        customer:      {{ customer | tojson }},
+        customerLabel: {{ customer_label | tojson }},
+        user:          {{ user | tojson }},
+        userFullname:  {{ user_fullname | tojson }},
+    };
+</script>
+<script type="module" src="/assets/entre_erp/support/index.js"></script>
+{% endblock %}

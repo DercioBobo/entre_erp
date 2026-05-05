@@ -1,0 +1,1 @@
+# Frappe and ERPNext are expected to be present in the bench environment

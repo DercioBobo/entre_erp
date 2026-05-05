@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Support Portal (dev)</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300..700;1,300..700&display=swap"
+            rel="stylesheet"
+        />
+    </head>
+    <body>
+        <div id="portal-root"></div>
+        <script>
+            // Provide stub context for Vite dev server (CSRF from cookie is read in api.js)
+            window.__portal_ctx__ = {
+                customer: "DEV-CUSTOMER",
+                customerLabel: "Dev Customer",
+                user: "dev@example.com",
+                userFullname: "Dev User",
+            };
+        </script>
+        <script type="module" src="/src/main.js"></script>
+    </body>
+</html>

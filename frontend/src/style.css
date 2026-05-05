@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html {
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+        @apply bg-slate-50 text-slate-900;
+    }
+}
+
+@layer utilities {
+    .content-prose {
+        @apply text-sm text-slate-700 leading-relaxed;
+    }
+
+    .content-prose p { @apply mb-2; }
+    .content-prose ul { @apply list-disc pl-4 mb-2; }
+    .content-prose ol { @apply list-decimal pl-4 mb-2; }
+    .content-prose a { @apply text-brand-600 underline; }
+}
