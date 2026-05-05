@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "creation": "2026-05-05 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "fieldname",
+  "label",
+  "fieldtype",
+  "options",
+  "visible",
+  "editable",
+  "required"
+ ],
+ "fields": [
+  {
+   "fieldname": "fieldname",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Field Name",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label",
+   "reqd": 1
+  },
+  {
+   "fieldname": "fieldtype",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Field Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "options",
+   "fieldtype": "Small Text",
+   "label": "Options"
+  },
+  {
+   "default": "1",
+   "fieldname": "visible",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Visible"
+  },
+  {
+   "default": "0",
+   "fieldname": "editable",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Editable on New"
+  },
+  {
+   "default": "0",
+   "fieldname": "required",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Required"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Issue Portal Field",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

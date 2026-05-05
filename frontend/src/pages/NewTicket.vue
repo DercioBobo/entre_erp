@@ -1,15 +1,28 @@
 <script setup>
-import { ref } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "@/utils/api";
 import { textToHtml } from "@/utils/format";
+import { loadFieldConfig, fieldConfig } from "@/stores/fieldConfig";
+import DynamicField from "@/components/DynamicField.vue";
 
-const router     = useRouter();
-const subject    = ref("");
+const router      = useRouter();
+const subject     = ref("");
 const description = ref("");
-const priority   = ref("Medium");
-const submitting = ref(false);
-const error      = ref(null);
+const priority    = ref("Medium");
+const submitting  = ref(false);
+const error       = ref(null);
+
+// Values for dynamic editable fields — keyed by fieldname
+const extraValues = ref({});
+
+// Fields configured as editable, excluding ones already in the fixed form
+const BUILTIN_FIELDS = new Set(["subject", "description", "priority", "customer"]);
+const editableFields = computed(() =>
+    fieldConfig.fields.value.filter(
+        (f) => f.editable && !BUILTIN_FIELDS.has(f.fieldname)
+    )
+);
 
 const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
 
@@ -18,14 +31,17 @@ async function submit() {
     submitting.value = true;
     error.value = null;
     try {
-        const html = textToHtml(description.value);
-        const res = await api.createIssue(subject.value, html, priority.value);
+        const html  = textToHtml(description.value);
+        const extra = editableFields.value.length ? extraValues.value : null;
+        const res   = await api.createIssue(subject.value, html, priority.value, extra);
         router.push(`/tickets/${res.issue_id}`);
     } catch (e) {
         error.value = e.message;
         submitting.value = false;
     }
 }
+
+onMounted(loadFieldConfig);
 </script>
 
 <template>
@@ -43,17 +59,12 @@ async function submit() {
         </button>
 
         <div class="bg-white border border-slate-200 rounded-xl p-6 sm:p-8">
-            <!-- Header -->
             <div class="mb-6">
                 <h1 class="text-lg font-semibold text-slate-900">Open a Support Ticket</h1>
                 <p class="text-sm text-slate-500 mt-1">Describe your issue and our team will get back to you.</p>
             </div>
 
-            <!-- Error -->
-            <div
-                v-if="error"
-                class="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-5"
-            >
+            <div v-if="error" class="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-5">
                 {{ error }}
             </div>
 
@@ -103,11 +114,27 @@ async function submit() {
                     <textarea
                         v-model="description"
                         rows="6"
-                        placeholder="Please describe your issue in detail — steps to reproduce, expected vs. actual behaviour, screenshots if relevant…"
+                        placeholder="Describe your issue in detail — steps to reproduce, expected vs. actual behaviour…"
                         required
                         class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-y transition"
                     />
                 </div>
+
+                <!-- Dynamic editable fields (from Issue Portal Field Config) -->
+                <template v-if="editableFields.length">
+                    <div class="border-t border-slate-100 pt-5 space-y-5">
+                        <DynamicField
+                            v-for="field in editableFields"
+                            :key="field.fieldname"
+                            :fieldname="field.fieldname"
+                            :label="field.label"
+                            :fieldtype="field.fieldtype"
+                            :options="field.options"
+                            :required="field.required"
+                            v-model="extraValues[field.fieldname]"
+                        />
+                    </div>
+                </template>
 
                 <!-- Actions -->
                 <div class="flex items-center justify-between pt-2">

@@ -1,3 +1,5 @@
+import json
+
 import frappe
 from frappe import _
 
@@ -5,6 +7,15 @@ from frappe import _
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _get_editable_fieldnames() -> set:
+    """Return fieldnames marked as editable in Issue Portal Field Config."""
+    try:
+        config = frappe.get_single("Issue Portal Field Config")
+        return {r.fieldname for r in (config.portal_fields or []) if r.editable}
+    except Exception:
+        return set()
+
 
 def _get_customer_or_raise() -> str:
     if frappe.session.user == "Guest":
@@ -82,26 +93,65 @@ def get_portal_issue(issue_id: str):
 
 
 @frappe.whitelist()
-def create_portal_issue(subject: str, description: str, priority: str = "Medium"):
+def create_portal_issue(
+    subject: str,
+    description: str,
+    priority: str = "Medium",
+    extra_fields: str = None,
+):
     customer = _get_customer_or_raise()
 
     if priority not in {"Low", "Medium", "High", "Urgent"}:
         frappe.throw(_("Invalid priority value."))
 
-    issue = frappe.get_doc(
-        {
-            "doctype": "Issue",
-            "subject": frappe.utils.strip_html(subject)[:140],
-            "customer": customer,
-            "priority": priority,
-            "description": frappe.utils.sanitize_html(description),
-            "status": "Open",
-        }
-    )
+    issue_data = {
+        "doctype": "Issue",
+        "subject": frappe.utils.strip_html(subject)[:140],
+        "customer": customer,
+        "priority": priority,
+        "description": frappe.utils.sanitize_html(description),
+        "status": "Open",
+    }
+
+    # Merge extra fields — only those explicitly configured as editable
+    if extra_fields:
+        allowed = _get_editable_fieldnames()
+        parsed = json.loads(extra_fields) if isinstance(extra_fields, str) else extra_fields
+        for fieldname, value in (parsed or {}).items():
+            if fieldname in allowed:
+                issue_data[fieldname] = value
+
+    issue = frappe.get_doc(issue_data)
     issue.insert(ignore_permissions=True)
     frappe.db.commit()
 
     return {"issue_id": issue.name, "subject": issue.subject}
+
+
+@frappe.whitelist()
+def get_portal_field_config():
+    """Return the configured portal fields for the current user."""
+    _get_customer_or_raise()
+
+    try:
+        config = frappe.get_single("Issue Portal Field Config")
+    except Exception:
+        return {"fields": []}
+
+    fields = [
+        {
+            "fieldname": r.fieldname,
+            "label": r.label,
+            "fieldtype": r.fieldtype,
+            "options": r.options or "",
+            "visible": bool(r.visible),
+            "editable": bool(r.editable),
+            "required": bool(r.required),
+        }
+        for r in (config.portal_fields or [])
+    ]
+
+    return {"fields": fields}
 
 
 @frappe.whitelist()

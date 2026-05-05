@@ -1,28 +1,53 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "@/utils/api";
 import { timeAgo, fullDate, initials, textToHtml } from "@/utils/format";
-import { portalCtx } from "@/config";
+import { loadFieldConfig, fieldConfig } from "@/stores/fieldConfig";
 import StatusBadge from "@/components/StatusBadge.vue";
 import PriorityBadge from "@/components/PriorityBadge.vue";
 
 const route  = useRoute();
 const router = useRouter();
 
-const issue         = ref(null);
+const issue          = ref(null);
 const communications = ref([]);
-const loading       = ref(true);
-const error         = ref(null);
-const replyText     = ref("");
-const submitting    = ref(false);
-const replyError    = ref(null);
+const loading        = ref(true);
+const error          = ref(null);
+const replyText      = ref("");
+const submitting     = ref(false);
+const replyError     = ref(null);
+
+// Fields that are always shown via the fixed sidebar sections — exclude from dynamic list
+const BUILTIN_FIELDS = new Set([
+    "name", "subject", "status", "priority", "description",
+    "customer", "creation", "modified", "owner", "modified_by",
+    "docstatus", "idx",
+]);
+
+const dynamicVisibleFields = computed(() =>
+    fieldConfig.fields.value.filter(
+        (f) => f.visible && !BUILTIN_FIELDS.has(f.fieldname)
+    )
+);
+
+function fieldValue(fieldname, fieldtype) {
+    if (!issue.value) return "—";
+    const raw = issue.value[fieldname];
+    if (raw === null || raw === undefined || raw === "") return "—";
+    if (fieldtype === "Check") return raw ? "Yes" : "No";
+    if (fieldtype === "Date") return fullDate(raw);
+    return String(raw);
+}
 
 async function load() {
     loading.value = true;
     error.value = null;
     try {
-        const data = await api.getIssue(route.params.id);
+        const [data] = await Promise.all([
+            api.getIssue(route.params.id),
+            loadFieldConfig(),
+        ]);
         issue.value = data.issue;
         communications.value = data.communications ?? [];
     } catch (e) {
@@ -41,7 +66,6 @@ async function submitReply() {
         const newComm = await api.addReply(issue.value.name, html);
         communications.value.push(newComm);
         replyText.value = "";
-        // Re-open if was resolved/closed
         if (["Resolved", "Closed"].includes(issue.value.status)) {
             issue.value.status = "Open";
         }
@@ -78,7 +102,7 @@ onMounted(load);
             {{ error }}
         </div>
 
-        <!-- Loading -->
+        <!-- Loading skeleton -->
         <div v-else-if="loading" class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
             <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
                 <div class="h-6 bg-slate-200 rounded w-3/4"></div>
@@ -92,44 +116,43 @@ onMounted(load);
             </div>
         </div>
 
-        <!-- Main layout -->
+        <!-- Content -->
         <div v-else-if="issue" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- Left: conversation -->
+            <!-- ── Left: conversation ── -->
             <div class="lg:col-span-2 space-y-4">
 
-                <!-- Subject card -->
+                <!-- Subject -->
                 <div class="bg-white border border-slate-200 rounded-xl p-6">
                     <div class="flex items-start gap-3 mb-3">
                         <StatusBadge :status="issue.status" />
                         <PriorityBadge :priority="issue.priority" />
                     </div>
                     <h1 class="text-lg font-semibold text-slate-900 mb-1">{{ issue.subject }}</h1>
-                    <p class="text-xs text-slate-400">Opened {{ timeAgo(issue.creation) }} &middot; {{ issue.name }}</p>
+                    <p class="text-xs text-slate-400">
+                        Opened {{ timeAgo(issue.creation) }} &middot; {{ issue.name }}
+                    </p>
                 </div>
 
                 <!-- Description -->
                 <div class="bg-white border border-slate-200 rounded-xl p-6">
                     <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Description</p>
-                    <div class="content-prose" v-html="issue.description || '<em>No description provided.</em>'"></div>
+                    <div
+                        class="content-prose"
+                        v-html="issue.description || '<em class=\'text-slate-400\'>No description provided.</em>'"
+                    />
                 </div>
 
-                <!-- Timeline -->
-                <div v-if="communications.length > 0" class="bg-white border border-slate-200 rounded-xl p-6">
+                <!-- Conversation timeline -->
+                <div v-if="communications.length" class="bg-white border border-slate-200 rounded-xl p-6">
                     <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-4">Conversation</p>
                     <div class="space-y-5">
-                        <div
-                            v-for="comm in communications"
-                            :key="comm.name"
-                            class="flex gap-3"
-                        >
+                        <div v-for="comm in communications" :key="comm.name" class="flex gap-3">
                             <!-- Avatar -->
                             <div
                                 :class="[
                                     'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5',
-                                    isCustomer(comm)
-                                        ? 'bg-brand-100 text-brand-700'
-                                        : 'bg-slate-100 text-slate-600',
+                                    isCustomer(comm) ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600',
                                 ]"
                             >
                                 {{ initials(comm.sender_full_name || comm.sender) }}
@@ -146,7 +169,9 @@ onMounted(load);
                                 <div
                                     :class="[
                                         'text-sm text-slate-700 leading-relaxed rounded-lg px-3 py-2.5',
-                                        isCustomer(comm) ? 'bg-brand-50 border border-brand-100' : 'bg-slate-50 border border-slate-100',
+                                        isCustomer(comm)
+                                            ? 'bg-brand-50 border border-brand-100'
+                                            : 'bg-slate-50 border border-slate-100',
                                     ]"
                                     v-html="comm.content"
                                 />
@@ -188,19 +213,18 @@ onMounted(load);
                 </div>
             </div>
 
-            <!-- Right: details sidebar -->
+            <!-- ── Right: sidebar ── -->
             <div class="space-y-4">
 
-                <!-- Status card -->
+                <!-- Status -->
                 <div class="bg-white border border-slate-200 rounded-xl p-5">
                     <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Status</p>
                     <StatusBadge :status="issue.status" />
                 </div>
 
-                <!-- Details card -->
-                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Details</p>
-
+                <!-- Built-in details -->
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-4">Details</p>
                     <dl class="space-y-3">
                         <div>
                             <dt class="text-xs text-slate-400 mb-0.5">Ticket ID</dt>
@@ -218,6 +242,16 @@ onMounted(load);
                             <dt class="text-xs text-slate-400 mb-0.5">Last updated</dt>
                             <dd class="text-sm text-slate-700">{{ timeAgo(issue.modified) }}</dd>
                         </div>
+
+                        <!-- Dynamic visible fields -->
+                        <template v-for="field in dynamicVisibleFields" :key="field.fieldname">
+                            <div>
+                                <dt class="text-xs text-slate-400 mb-0.5">{{ field.label }}</dt>
+                                <dd class="text-sm text-slate-700">
+                                    {{ fieldValue(field.fieldname, field.fieldtype) }}
+                                </dd>
+                            </div>
+                        </template>
                     </dl>
                 </div>
             </div>

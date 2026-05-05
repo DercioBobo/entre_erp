@@ -36,9 +36,17 @@ export const api = {
     getIssue: (issueId) =>
         call("get_portal_issue", { issue_id: issueId }),
 
-    createIssue: (subject, description, priority) =>
-        call("create_portal_issue", { subject, description, priority }),
+    createIssue: (subject, description, priority, extraFields = null) =>
+        call("create_portal_issue", {
+            subject,
+            description,
+            priority,
+            extra_fields: extraFields ? JSON.stringify(extraFields) : null,
+        }),
 
     addReply: (issueId, content) =>
         call("add_portal_reply", { issue_id: issueId, content }),
+
+    getFieldConfig: () =>
+        call("get_portal_field_config"),
 };

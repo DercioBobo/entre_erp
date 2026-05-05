@@ -1,0 +1,35 @@
+{
+ "actions": [],
+ "creation": "2026-05-05 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "portal_fields"
+ ],
+ "fields": [
+  {
+   "fieldname": "portal_fields",
+   "fieldtype": "Table",
+   "label": "Portal Fields",
+   "options": "Issue Portal Field"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-05-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Issue Portal Field Config",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}
