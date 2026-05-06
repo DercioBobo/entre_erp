@@ -18,8 +18,10 @@ export default defineConfig({
         outDir: "../entre_erp/public/support",
         emptyOutDir: true,
         rollupOptions: {
+            // Use JS as the entry point so Vite does not emit index.html into public/
+            // The HTML shell is provided by Frappe via www/support.html
+            input: resolve(__dirname, "src/main.js"),
             output: {
-                // Predictable names so www/support.html can reference them directly
                 entryFileNames: "index.js",
                 chunkFileNames: "chunks/[name]-[hash].js",
                 assetFileNames: (info) => {
