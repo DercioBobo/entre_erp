@@ -13,8 +13,8 @@
     <body>
         <div id="portal-root"></div>
         <script>
-            // Provide stub context for Vite dev server (CSRF from cookie is read in api.js)
-            window.__portal_ctx__ = {
+            // Stub context for Vite dev server (CSRF from cookie is read in api.js)
+            window.portalCtx = {
                 customer: "DEV-CUSTOMER",
                 customerLabel: "Dev Customer",
                 user: "dev@example.com",

@@ -13,7 +13,7 @@
 {% block body %}
 <div id="portal-root"></div>
 <script>
-    window.__portal_ctx__ = {
+    window.portalCtx = {
         customer:      {{ customer | tojson }},
         customerLabel: {{ customer_label | tojson }},
         user:          {{ user | tojson }},
