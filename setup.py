@@ -8,7 +8,7 @@ with open("requirements.txt") as f:
 setup(
     name="entre_erp",
     version="0.0.1",
-    description="Entre ERP — Custom ERPNext enhancements with modern customer portal",
+    description="Entre ERP — Custom ERPNext enhancements",
     author="Dércio Bobo",
     author_email="derciobob@gmail.com",
     packages=find_packages(),
