@@ -9,6 +9,7 @@ class DeploymentPlan(Document):
 		self._validate_git_references()
 		self._validate_people_have_tech_role()
 		self._validate_approver_has_tech_lead_role()
+		self._validate_clickup_task()
 
 	# ------------------------------------------------------------------
 	# Private
@@ -48,4 +49,13 @@ class DeploymentPlan(Document):
 					frappe.bold(self.approver), frappe.bold("Tech Lead")
 				),
 				title=_("Invalid Approver"),
+			)
+
+	def _validate_clickup_task(self):
+		if self.clickup_task_ref and not self.clickup_task_id:
+			frappe.throw(
+				_("Click {0} to validate the ClickUp task before saving.").format(
+					frappe.bold(_("Fetch from ClickUp"))
+				),
+				title=_("ClickUp Task Not Verified"),
 			)
