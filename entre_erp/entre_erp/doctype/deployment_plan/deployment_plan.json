@@ -1,0 +1,259 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-09-11 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "application",
+  "column_break_title",
+  "workflow_state",
+  "implementation_datetime",
+  "duration",
+  "section_break_git",
+  "git_references",
+  "section_break_outage",
+  "causes_service_outage",
+  "outage_details",
+  "section_break_desc",
+  "description",
+  "section_break_people",
+  "implemented_by",
+  "standby",
+  "people_involved",
+  "approver",
+  "section_break_testing",
+  "what_was_tested",
+  "tested_by",
+  "section_break_rollback",
+  "rollback_plan",
+  "section_break_outcome",
+  "outcome",
+  "outcome_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "DP-.YYYY.-.####",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "application",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Application",
+   "options": "Application",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_title",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "implementation_datetime",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Implementation Date & Time",
+   "reqd": 1
+  },
+  {
+   "fieldname": "duration",
+   "fieldtype": "Select",
+   "label": "Duration",
+   "options": "< 15 minutes\n15 - 30 minutes\n30 - 60 minutes\n1 - 2 hours\n2 - 4 hours\n> 4 hours",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_git",
+   "fieldtype": "Section Break",
+   "label": "Git References"
+  },
+  {
+   "fieldname": "git_references",
+   "fieldtype": "Table",
+   "label": "Git References",
+   "options": "Deployment Plan Git Reference",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_outage",
+   "fieldtype": "Section Break",
+   "label": "Service Outage"
+  },
+  {
+   "fieldname": "causes_service_outage",
+   "fieldtype": "Check",
+   "label": "Will this cause a service outage?"
+  },
+  {
+   "depends_on": "eval:doc.causes_service_outage",
+   "fieldname": "outage_details",
+   "fieldtype": "Small Text",
+   "label": "Outage Details",
+   "mandatory_depends_on": "eval:doc.causes_service_outage"
+  },
+  {
+   "fieldname": "section_break_desc",
+   "fieldtype": "Section Break",
+   "label": "What Will Be Implemented"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_people",
+   "fieldtype": "Section Break",
+   "label": "People"
+  },
+  {
+   "fieldname": "implemented_by",
+   "fieldtype": "Table MultiSelect",
+   "label": "Implemented By",
+   "options": "Deployment Plan User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "standby",
+   "fieldtype": "Table MultiSelect",
+   "label": "Standby",
+   "options": "Deployment Plan User"
+  },
+  {
+   "fieldname": "people_involved",
+   "fieldtype": "Table MultiSelect",
+   "label": "People Involved",
+   "options": "Deployment Plan User"
+  },
+  {
+   "fieldname": "approver",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Approver",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_testing",
+   "fieldtype": "Section Break",
+   "label": "Testing"
+  },
+  {
+   "fieldname": "what_was_tested",
+   "fieldtype": "Text",
+   "label": "What Was Tested"
+  },
+  {
+   "fieldname": "tested_by",
+   "fieldtype": "Link",
+   "label": "Tested By",
+   "options": "User"
+  },
+  {
+   "fieldname": "section_break_rollback",
+   "fieldtype": "Section Break",
+   "label": "Roll Back Plan"
+  },
+  {
+   "fieldname": "rollback_plan",
+   "fieldtype": "Text",
+   "label": "Roll Back Plan",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_outcome",
+   "fieldtype": "Section Break",
+   "label": "Outcome"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "label": "Outcome",
+   "options": "\nSuccess\nSuccess with Issues\nRolled Back\nFailed"
+  },
+  {
+   "allow_on_submit": 1,
+   "depends_on": "eval:doc.outcome",
+   "fieldname": "outcome_notes",
+   "fieldtype": "Small Text",
+   "label": "Outcome Notes"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Deployment Plan",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Tech Lead",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "title",
+ "track_changes": 1
+}

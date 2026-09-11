@@ -1,0 +1,102 @@
+{
+ "creation": "2026-09-11 00:00:00.000000",
+ "doctype": "Workflow",
+ "document_type": "Deployment Plan",
+ "is_active": 1,
+ "modified": "2026-09-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Deployment Plan Workflow",
+ "owner": "Administrator",
+ "send_email_alert": 0,
+ "states": [
+  {
+   "doctype": "Workflow Document State",
+   "state": "Draft",
+   "doc_status": "0",
+   "allow_edit": "System User"
+  },
+  {
+   "doctype": "Workflow Document State",
+   "state": "Pending Approval",
+   "doc_status": "0",
+   "allow_edit": "Tech Lead"
+  },
+  {
+   "doctype": "Workflow Document State",
+   "state": "Approved",
+   "doc_status": "1",
+   "allow_edit": "System User"
+  },
+  {
+   "doctype": "Workflow Document State",
+   "state": "Done",
+   "doc_status": "1",
+   "allow_edit": "System User"
+  },
+  {
+   "doctype": "Workflow Document State",
+   "state": "Rolled Back",
+   "doc_status": "1",
+   "allow_edit": "System User"
+  },
+  {
+   "doctype": "Workflow Document State",
+   "state": "Rejected",
+   "doc_status": "2",
+   "allow_edit": "System Manager"
+  },
+  {
+   "doctype": "Workflow Document State",
+   "state": "Cancelled",
+   "doc_status": "2",
+   "allow_edit": "System Manager"
+  }
+ ],
+ "transitions": [
+  {
+   "doctype": "Workflow Transition",
+   "state": "Draft",
+   "action": "Submit for Approval",
+   "next_state": "Pending Approval",
+   "allowed": "System User"
+  },
+  {
+   "doctype": "Workflow Transition",
+   "state": "Draft",
+   "action": "Cancel",
+   "next_state": "Cancelled",
+   "allowed": "System User"
+  },
+  {
+   "doctype": "Workflow Transition",
+   "state": "Pending Approval",
+   "action": "Approve",
+   "next_state": "Approved",
+   "allowed": "Tech Lead"
+  },
+  {
+   "doctype": "Workflow Transition",
+   "state": "Pending Approval",
+   "action": "Reject",
+   "next_state": "Rejected",
+   "allowed": "Tech Lead"
+  },
+  {
+   "doctype": "Workflow Transition",
+   "state": "Approved",
+   "action": "Mark as Done",
+   "next_state": "Done",
+   "allowed": "System User"
+  },
+  {
+   "doctype": "Workflow Transition",
+   "state": "Approved",
+   "action": "Roll Back",
+   "next_state": "Rolled Back",
+   "allowed": "System User"
+  }
+ ],
+ "workflow_name": "Deployment Plan Workflow",
+ "workflow_state_field": "workflow_state"
+}

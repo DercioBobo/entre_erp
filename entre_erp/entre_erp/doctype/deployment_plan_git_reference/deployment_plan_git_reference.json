@@ -1,0 +1,28 @@
+{
+ "actions": [],
+ "creation": "2026-09-11 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "git_reference"
+ ],
+ "fields": [
+  {
+   "fieldname": "git_reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Git Reference (branch / tag / commit / PR)",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Deployment Plan Git Reference",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
