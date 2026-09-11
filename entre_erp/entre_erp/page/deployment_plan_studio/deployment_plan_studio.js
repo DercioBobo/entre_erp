@@ -25,6 +25,21 @@ function status_pill(state) {
 	return `<span class="dp-pill dp-pill-${cls}">${frappe.utils.escape_html(state || "Draft")}</span>`;
 }
 
+function build_clickup_description_html(tasks) {
+	const fetched = (tasks || []).filter((row) => row.task_name);
+	if (!fetched.length) return null;
+
+	return fetched
+		.map((row) => {
+			const heading = `<h4>${frappe.utils.escape_html(row.task_name)}</h4>`;
+			const body = row.task_description
+				? `<p>${frappe.utils.escape_html(row.task_description).replace(/\n/g, "<br>")}</p>`
+				: `<p><em>${__("No description provided.")}</em></p>`;
+			return heading + body;
+		})
+		.join("<hr>");
+}
+
 class DeploymentPlanStudio {
 	constructor(page) {
 		this.page = page;
@@ -157,6 +172,7 @@ class DeploymentPlanStudio {
 	render_editor(doc) {
 		this.current_doc = doc;
 		this.controls = {};
+		this._last_generated_description = null;
 		const locked = doc.docstatus === 1;
 
 		this.$body.html(`
@@ -385,6 +401,34 @@ class DeploymentPlanStudio {
 		return control;
 	}
 
+	// Manual (button click, always offers to overwrite) and automatic
+	// (silent, only fills in while untouched since the last auto-fill).
+	apply_description(silent) {
+		const html = build_clickup_description_html(this.clickup_picker ? this.clickup_picker.get_rows() : []);
+		if (!html) {
+			if (!silent) frappe.msgprint(__("Fetch at least one ClickUp task first."));
+			return;
+		}
+
+		const current = this.controls.description.get_value();
+		const untouched = !current || current === this._last_generated_description;
+		const apply = () => {
+			this.controls.description.set_value(html);
+			this._last_generated_description = html;
+		};
+
+		if (silent) {
+			if (untouched) apply();
+			return;
+		}
+
+		if (untouched) {
+			apply();
+		} else {
+			frappe.confirm(__("This will replace the current Description. Continue?"), apply);
+		}
+	}
+
 	// ------------------------------------------------------------------
 	// Git References — card list, no grid
 	// ------------------------------------------------------------------
@@ -498,6 +542,7 @@ class DeploymentPlanStudio {
 							});
 						}
 						render();
+						this.apply_description(true);
 					},
 					error: () => render(),
 				});
@@ -505,6 +550,7 @@ class DeploymentPlanStudio {
 			$list.find(".dp-chip-remove").on("click", (e) => {
 				rows.splice($(e.currentTarget).closest(".dp-task-card").data("idx"), 1);
 				render();
+				this.apply_description(true);
 			});
 		};
 		render();
@@ -514,30 +560,10 @@ class DeploymentPlanStudio {
 			render();
 		});
 
-		$gen.on("click", () => {
-			const fetched = rows.filter((r) => r.task_name);
-			if (!fetched.length) {
-				frappe.msgprint(__("Fetch at least one ClickUp task first."));
-				return;
-			}
-			const html = fetched
-				.map((r) => {
-					const heading = `<h4>${frappe.utils.escape_html(r.task_name)}</h4>`;
-					const body = r.task_description
-						? `<p>${frappe.utils.escape_html(r.task_description).replace(/\n/g, "<br>")}</p>`
-						: `<p><em>${__("No description provided.")}</em></p>`;
-					return heading + body;
-				})
-				.join("<hr>");
-			const apply = () => this.controls.description.set_value(html);
-			if (this.controls.description.get_value()) {
-				frappe.confirm(__("This will replace the current Description. Continue?"), apply);
-			} else {
-				apply();
-			}
-		});
+		$gen.on("click", () => this.apply_description(false));
 
 		return {
+			get_rows: () => rows,
 			get_value: () =>
 				rows
 					.filter((r) => r.task_ref)
