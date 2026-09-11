@@ -20,6 +20,16 @@ web_include_js = []
 # Fixtures — exported/imported on bench migrate
 # ---------------------------------------------------------------------------
 fixtures = [
+    {
+        "dt": "Workflow State",
+        "filters": [
+            [
+                "name",
+                "in",
+                ["Draft", "Pending Approval", "Approved", "Done", "Rolled Back", "Rejected", "Cancelled"],
+            ]
+        ],
+    },
     {"dt": "Workflow", "filters": [["name", "in", ["Deployment Plan Workflow"]]]},
 ]
 

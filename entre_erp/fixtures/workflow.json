@@ -12,7 +12,7 @@
     "doctype": "Workflow Document State",
     "state": "Draft",
     "doc_status": "0",
-    "allow_edit": "System User"
+    "allow_edit": "Tech"
    },
    {
     "doctype": "Workflow Document State",
@@ -24,31 +24,31 @@
     "doctype": "Workflow Document State",
     "state": "Approved",
     "doc_status": "1",
-    "allow_edit": "System User"
+    "allow_edit": "Tech"
    },
    {
     "doctype": "Workflow Document State",
     "state": "Done",
     "doc_status": "1",
-    "allow_edit": "System User"
+    "allow_edit": "Tech"
    },
    {
     "doctype": "Workflow Document State",
     "state": "Rolled Back",
     "doc_status": "1",
-    "allow_edit": "System User"
+    "allow_edit": "Tech"
    },
    {
     "doctype": "Workflow Document State",
     "state": "Rejected",
     "doc_status": "0",
-    "allow_edit": "System Manager"
+    "allow_edit": "Tech Lead"
    },
    {
     "doctype": "Workflow Document State",
     "state": "Cancelled",
     "doc_status": "0",
-    "allow_edit": "System Manager"
+    "allow_edit": "Tech"
    }
   ],
   "transitions": [
@@ -57,14 +57,14 @@
     "state": "Draft",
     "action": "Submit for Approval",
     "next_state": "Pending Approval",
-    "allowed": "System User"
+    "allowed": "Tech"
    },
    {
     "doctype": "Workflow Transition",
     "state": "Draft",
     "action": "Cancel",
     "next_state": "Cancelled",
-    "allowed": "System User"
+    "allowed": "Tech"
    },
    {
     "doctype": "Workflow Transition",
@@ -85,14 +85,14 @@
     "state": "Approved",
     "action": "Mark as Done",
     "next_state": "Done",
-    "allowed": "System User"
+    "allowed": "Tech"
    },
    {
     "doctype": "Workflow Transition",
     "state": "Approved",
     "action": "Roll Back",
     "next_state": "Rolled Back",
-    "allowed": "System User"
+    "allowed": "Tech"
    }
   ]
  }
