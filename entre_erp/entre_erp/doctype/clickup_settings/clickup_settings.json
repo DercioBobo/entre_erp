@@ -6,7 +6,8 @@
  "field_order": [
   "api_token",
   "task_url_prefix",
-  "allowed_statuses"
+  "allowed_statuses",
+  "done_status"
  ],
  "fields": [
   {
@@ -29,6 +30,12 @@
    "fieldname": "allowed_statuses",
    "fieldtype": "Small Text",
    "label": "Allowed Statuses"
+  },
+  {
+   "description": "When a Deployment Plan is marked Done, every linked ClickUp task is pushed to this exact status. Must be a status that exists on each task's own ClickUp List, or that task's update will fail (reported, but won't block the Deployment Plan). Leave empty to disable this sync.",
+   "fieldname": "done_status",
+   "fieldtype": "Data",
+   "label": "Status to Set on Done"
   }
  ],
  "issingle": 1,

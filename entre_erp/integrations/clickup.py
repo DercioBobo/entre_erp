@@ -100,3 +100,46 @@ def validate_task_status(task_name, status):
 			),
 			title=_("ClickUp Status Not Allowed"),
 		)
+
+
+def update_task_status(task_id, status):
+	"""Push a new status to a ClickUp task. Raises on failure — callers that
+	want to sync several tasks without one failure blocking the rest should
+	catch per task (see sync_tasks_to_done)."""
+	token = get_api_token()
+	response = requests.put(
+		f"{CLICKUP_API_BASE}/task/{task_id}",
+		headers={"Authorization": token, "Content-Type": "application/json"},
+		json={"status": status},
+		timeout=10,
+	)
+	if not response.ok:
+		raise frappe.ValidationError(f"ClickUp API error ({response.status_code}): {response.text[:200]}")
+
+
+def sync_tasks_to_done(doc):
+	"""Push the configured 'Status to Set on Done' to every linked ClickUp
+	task. Best-effort per task: one failure (e.g. that status doesn't exist
+	on a particular task's List) is reported, not raised — it must never
+	block the Deployment Plan itself from being marked Done."""
+	done_status = frappe.db.get_single_value("ClickUp Settings", "done_status")
+	if not done_status:
+		return
+
+	failed = []
+	for row in doc.clickup_tasks or []:
+		if not row.task_id:
+			continue
+		try:
+			update_task_status(row.task_id, done_status)
+			row.db_set("task_status", done_status, update_modified=False)
+		except Exception:
+			frappe.log_error(title="ClickUp status sync failed")
+			failed.append(row.task_name or row.task_id)
+
+	if failed:
+		frappe.msgprint(
+			_("Could not update ClickUp status for: {0}").format(", ".join(failed)),
+			title=_("ClickUp Sync Issue"),
+			indicator="orange",
+		)
