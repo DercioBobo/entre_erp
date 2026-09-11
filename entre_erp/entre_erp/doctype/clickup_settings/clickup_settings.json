@@ -7,7 +7,9 @@
   "api_token",
   "task_url_prefix",
   "allowed_statuses",
-  "done_status"
+  "done_status",
+  "team_id",
+  "search_list_ids"
  ],
  "fields": [
   {
@@ -36,6 +38,18 @@
    "fieldname": "done_status",
    "fieldtype": "Data",
    "label": "Status to Set on Done"
+  },
+  {
+   "description": "Your ClickUp Workspace/Team ID — required for searching tasks by title (ClickUp's API has no full-text search, so we fetch and filter by name ourselves). Find it in ClickUp's URL: app.clickup.com/&lt;team_id&gt;/home.",
+   "fieldname": "team_id",
+   "fieldtype": "Data",
+   "label": "Team ID (for search)"
+  },
+  {
+   "description": "One ClickUp List ID per line. Narrows title search to just these Lists — faster and more precise. Leave empty to search across the whole workspace (only the first ~100 open tasks are checked, so results may be incomplete on a large workspace).",
+   "fieldname": "search_list_ids",
+   "fieldtype": "Small Text",
+   "label": "Limit Search To Lists"
   }
  ],
  "issingle": 1,

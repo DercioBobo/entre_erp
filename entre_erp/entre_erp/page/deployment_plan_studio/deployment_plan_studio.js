@@ -494,6 +494,36 @@ class DeploymentPlanStudio {
 			task_description: r.task_description || "",
 		}));
 
+		// Resolve a row's ref (a pasted link/ID, or a task ID picked from the
+		// search suggestions below) into a fully-fetched task.
+		const resolve_row = (idx, val) => {
+			Object.assign(rows[idx], { task_ref: val, task_id: "", task_name: "", task_status: "", task_url: "", task_description: "" });
+			if (!val) {
+				render();
+				return;
+			}
+			frappe.call({
+				method: "entre_erp.integrations.clickup.get_task",
+				args: { task_ref: val },
+				freeze: true,
+				freeze_message: __("Fetching from ClickUp..."),
+				callback: (r) => {
+					if (r.message) {
+						Object.assign(rows[idx], {
+							task_id: r.message.task_id,
+							task_name: r.message.name,
+							task_status: r.message.status,
+							task_url: r.message.url,
+							task_description: r.message.description,
+						});
+					}
+					render();
+					this.apply_description(true);
+				},
+				error: () => render(),
+			});
+		};
+
 		const render = () => {
 			$list.html(
 				rows
@@ -501,7 +531,10 @@ class DeploymentPlanStudio {
 						(row, i) => `
 				<div class="dp-task-card" data-idx="${i}">
 					<div class="dp-task-top">
-						<input type="text" class="form-control dp-task-ref" value="${frappe.utils.escape_html(row.task_ref)}" placeholder="${__("ClickUp task link or ID")}">
+						<div class="dp-task-ref-wrap">
+							<input type="text" class="form-control dp-task-ref" value="${frappe.utils.escape_html(row.task_ref)}" placeholder="${__("Paste a link/ID, or type a title to search...")}">
+							<div class="dp-suggest" style="display:none;"></div>
+						</div>
 						<span class="dp-chip-remove" title="${__("Remove")}">&times;</span>
 					</div>
 					${
@@ -520,33 +553,51 @@ class DeploymentPlanStudio {
 
 			$list.find(".dp-task-ref").on("change", (e) => {
 				const idx = $(e.currentTarget).closest(".dp-task-card").data("idx");
-				const val = $(e.currentTarget).val();
-				Object.assign(rows[idx], { task_ref: val, task_id: "", task_name: "", task_status: "", task_url: "", task_description: "" });
-				if (!val) {
-					render();
-					return;
-				}
-				frappe.call({
-					method: "entre_erp.integrations.clickup.get_task",
-					args: { task_ref: val },
-					freeze: true,
-					freeze_message: __("Fetching from ClickUp..."),
-					callback: (r) => {
-						if (r.message) {
-							Object.assign(rows[idx], {
-								task_id: r.message.task_id,
-								task_name: r.message.name,
-								task_status: r.message.status,
-								task_url: r.message.url,
-								task_description: r.message.description,
-							});
-						}
-						render();
-						this.apply_description(true);
-					},
-					error: () => render(),
-				});
+				resolve_row(idx, $(e.currentTarget).val());
 			});
+
+			$list.find(".dp-task-ref").on(
+				"input",
+				frappe.utils.debounce((e) => {
+					const $input = $(e.currentTarget);
+					const $suggest = $input.siblings(".dp-suggest");
+					const idx = $input.closest(".dp-task-card").data("idx");
+					const txt = $input.val();
+					if (!txt) {
+						$suggest.hide();
+						return;
+					}
+					frappe.call({
+						method: "entre_erp.integrations.clickup.search_tasks",
+						args: { txt },
+						callback: (r) => {
+							const results = r.message || [];
+							if (!results.length) {
+								$suggest.hide();
+								return;
+							}
+							$suggest
+								.html(
+									results
+										.map(
+											(t) => `
+									<div class="dp-suggest-item" data-task-id="${frappe.utils.escape_html(t.task_id)}">
+										${frappe.utils.escape_html(t.name)}
+										${t.status ? `<span class="dp-pill dp-pill-blue">${frappe.utils.escape_html(t.status)}</span>` : ""}
+									</div>`
+										)
+										.join("")
+								)
+								.show();
+							$suggest.find(".dp-suggest-item").on("click", function () {
+								resolve_row(idx, $(this).data("task-id"));
+								$suggest.hide();
+							});
+						},
+					});
+				}, 400)
+			);
+
 			$list.find(".dp-chip-remove").on("click", (e) => {
 				rows.splice($(e.currentTarget).closest(".dp-task-card").data("idx"), 1);
 				render();
@@ -845,6 +896,8 @@ function inject_styles() {
 
 		.dp-chip-row, .dp-task-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 		.dp-chip-row input, .dp-task-top input { flex: 1; font-family: monospace; font-size: 13px; }
+		.dp-task-ref-wrap { position: relative; flex: 1; }
+		.dp-task-ref-wrap input { width: 100%; }
 		.dp-chip-remove {
 			cursor: pointer;
 			color: var(--dp-text-muted);

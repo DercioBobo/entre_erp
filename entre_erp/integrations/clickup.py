@@ -81,6 +81,59 @@ def build_task_url(task_id, fallback_url=None):
 	return fallback_url
 
 
+@frappe.whitelist()
+def search_tasks(txt):
+	"""Approximate 'search by title' — ClickUp's v2 API has no full-text task
+	search endpoint, so this fetches open tasks (optionally scoped to the
+	configured Lists) and filters by name here. Returns at most 20 matches:
+	[{task_id, name, status}], for a caller to render as suggestions and,
+	once one is picked, resolve fully via get_task().
+	"""
+	txt = (txt or "").strip()
+	if not txt:
+		return []
+
+	team_id = frappe.db.get_single_value("ClickUp Settings", "team_id")
+	if not team_id:
+		frappe.throw(
+			_("Set a Team ID in {0} to search ClickUp tasks by title.").format(frappe.bold(_("ClickUp Settings"))),
+			title=_("ClickUp Not Configured"),
+		)
+
+	token = get_api_token()
+	params = [("page", 0)]
+	for list_id in get_search_list_ids():
+		params.append(("list_ids[]", list_id))
+
+	response = requests.get(
+		f"{CLICKUP_API_BASE}/team/{team_id}/task",
+		headers={"Authorization": token},
+		params=params,
+		timeout=15,
+	)
+	if not response.ok:
+		frappe.throw(_("ClickUp API error ({0}): {1}").format(response.status_code, response.text[:200]))
+
+	txt_lower = txt.lower()
+	matches = [
+		task for task in response.json().get("tasks", []) if txt_lower in (task.get("name") or "").lower()
+	]
+
+	return [
+		{
+			"task_id": task.get("id"),
+			"name": task.get("name"),
+			"status": (task.get("status") or {}).get("status"),
+		}
+		for task in matches[:20]
+	]
+
+
+def get_search_list_ids():
+	raw = frappe.db.get_single_value("ClickUp Settings", "search_list_ids") or ""
+	return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
 def get_allowed_statuses():
 	raw = frappe.db.get_single_value("ClickUp Settings", "allowed_statuses") or ""
 	return [line.strip().lower() for line in raw.splitlines() if line.strip()]

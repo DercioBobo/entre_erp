@@ -44,6 +44,86 @@ function apply_clickup_description(frm, { silent } = {}) {
 	}
 }
 
+// Search ClickUp by title (there's no search endpoint in ClickUp's API, so
+// entre_erp.integrations.clickup.search_tasks fetches and filters by name
+// itself) and add the picked task as a new, fully-fetched grid row.
+function open_clickup_search_dialog(frm) {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Search ClickUp Tasks"),
+		fields: [
+			{ fieldtype: "Data", fieldname: "search", label: __("Task title contains...") },
+			{ fieldtype: "HTML", fieldname: "results" },
+		],
+	});
+
+	const $results = dialog.fields_dict.results.$wrapper;
+
+	const render_results = (rows) => {
+		if (!rows.length) {
+			$results.html(`<div class="text-muted" style="padding:8px;">${__("No matches.")}</div>`);
+			return;
+		}
+		$results.html(
+			rows
+				.map(
+					(t) => `
+				<div class="dp-search-result" data-task-id="${frappe.utils.escape_html(t.task_id)}"
+					style="padding:8px;border-bottom:1px solid var(--border-color,#eee);cursor:pointer;">
+					<strong>${frappe.utils.escape_html(t.name)}</strong>
+					${t.status ? `<span class="text-muted"> — ${frappe.utils.escape_html(t.status)}</span>` : ""}
+				</div>`
+				)
+				.join("")
+		);
+		$results.find(".dp-search-result").on("click", function () {
+			const task_id = $(this).data("task-id");
+			dialog.hide();
+			add_clickup_task_row(frm, task_id);
+		});
+	};
+
+	dialog.fields_dict.search.$input.on(
+		"input",
+		frappe.utils.debounce(() => {
+			const txt = dialog.get_value("search");
+			if (!txt) {
+				$results.empty();
+				return;
+			}
+			frappe.call({
+				method: "entre_erp.integrations.clickup.search_tasks",
+				args: { txt },
+				callback: (r) => render_results(r.message || []),
+			});
+		}, 400)
+	);
+
+	dialog.show();
+}
+
+function add_clickup_task_row(frm, task_id) {
+	frappe.call({
+		method: "entre_erp.integrations.clickup.get_task",
+		args: { task_ref: task_id },
+		freeze: true,
+		freeze_message: __("Fetching from ClickUp..."),
+		callback(r) {
+			if (!r.message) return;
+			const task = r.message;
+			frm.add_child("clickup_tasks", {
+				task_ref: task.task_id,
+				task_id: task.task_id,
+				task_name: task.name,
+				task_status: task.status,
+				task_url: task.url,
+				task_description: task.description,
+			});
+			frm.refresh_field("clickup_tasks");
+			apply_clickup_description(frm, { silent: true });
+		},
+	});
+}
+
 frappe.ui.form.on("Deployment Plan", {
 	setup(frm) {
 		["implemented_by", "standby", "people_involved"].forEach((fieldname) => {
@@ -57,6 +137,15 @@ frappe.ui.form.on("Deployment Plan", {
 			query: "entre_erp.api.get_users_by_role",
 			filters: { role: "Tech Lead" },
 		}));
+	},
+
+	refresh(frm) {
+		if (!frm.__clickup_search_button_added) {
+			frm.fields_dict.clickup_tasks.grid.add_custom_button(__("Search ClickUp"), () =>
+				open_clickup_search_dialog(frm)
+			);
+			frm.__clickup_search_button_added = true;
+		}
 	},
 
 	generate_description(frm) {
