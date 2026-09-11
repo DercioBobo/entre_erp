@@ -4,7 +4,8 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "api_token"
+  "api_token",
+  "task_url_prefix"
  ],
  "fields": [
   {
@@ -12,6 +13,14 @@
    "fieldname": "api_token",
    "fieldtype": "Password",
    "label": "API Token",
+   "reqd": 1
+  },
+  {
+   "default": "https://app.clickup.com/t/",
+   "description": "Prepended to a task's ID to build its link (e.g. \"Open in ClickUp\"). Edit this to match your workspace's actual task URL format if it differs — whatever you put here is glued directly in front of the task ID, no slash is added automatically.",
+   "fieldname": "task_url_prefix",
+   "fieldtype": "Data",
+   "label": "Task URL Prefix",
    "reqd": 1
   }
  ],

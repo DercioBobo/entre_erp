@@ -15,13 +15,8 @@
   "section_break_git",
   "git_references",
   "section_break_clickup",
-  "clickup_task_ref",
-  "fetch_clickup_task",
-  "column_break_clickup",
-  "clickup_task_id",
-  "clickup_task_name",
-  "clickup_task_status",
-  "clickup_task_html",
+  "clickup_tasks",
+  "generate_description",
   "section_break_outage",
   "causes_service_outage",
   "outage_details",
@@ -113,51 +108,16 @@
    "label": "ClickUp"
   },
   {
-   "fieldname": "clickup_task_ref",
-   "fieldtype": "Data",
-   "label": "ClickUp Task Link or ID"
+   "fieldname": "clickup_tasks",
+   "fieldtype": "Table",
+   "label": "ClickUp Tasks",
+   "options": "Deployment Plan ClickUp Task"
   },
   {
-   "depends_on": "eval:doc.clickup_task_ref",
-   "fieldname": "fetch_clickup_task",
+   "depends_on": "eval:doc.clickup_tasks && doc.clickup_tasks.length",
+   "fieldname": "generate_description",
    "fieldtype": "Button",
-   "label": "Fetch from ClickUp"
-  },
-  {
-   "fieldname": "column_break_clickup",
-   "fieldtype": "Column Break"
-  },
-  {
-   "depends_on": "eval:doc.clickup_task_id",
-   "fieldname": "clickup_task_id",
-   "fieldtype": "Data",
-   "label": "ClickUp Task ID",
-   "no_copy": 1,
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.clickup_task_id",
-   "fieldname": "clickup_task_name",
-   "fieldtype": "Data",
-   "label": "ClickUp Task Name",
-   "no_copy": 1,
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.clickup_task_id",
-   "fieldname": "clickup_task_status",
-   "fieldtype": "Data",
-   "label": "ClickUp Status",
-   "no_copy": 1,
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.clickup_task_id",
-   "fieldname": "clickup_task_html",
-   "fieldtype": "HTML",
-   "label": "",
-   "no_copy": 1,
-   "read_only": 1
+   "label": "Generate Description from ClickUp Tasks"
   },
   {
    "fieldname": "section_break_outage",

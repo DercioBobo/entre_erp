@@ -13,37 +13,58 @@ frappe.ui.form.on("Deployment Plan", {
 		}));
 	},
 
-	clickup_task_ref(frm) {
-		// The link/ID text changed — the cached fetch, if any, is now stale.
-		if (frm.doc.clickup_task_id) {
-			frm.set_value("clickup_task_id", "");
-			frm.set_value("clickup_task_name", "");
-			frm.set_value("clickup_task_status", "");
-			frm.set_value("clickup_task_html", "");
-		}
-	},
-
-	fetch_clickup_task(frm) {
-		if (!frm.doc.clickup_task_ref) {
-			frappe.msgprint(__("Paste a ClickUp task link or ID first."));
+	generate_description(frm) {
+		const tasks = (frm.doc.clickup_tasks || []).filter((row) => row.task_name);
+		if (!tasks.length) {
+			frappe.msgprint(__("Fetch at least one ClickUp task first."));
 			return;
 		}
+
+		const html = tasks
+			.map((row) => {
+				const heading = `<h4>${frappe.utils.escape_html(row.task_name)}</h4>`;
+				const body = row.task_description
+					? `<p>${frappe.utils.escape_html(row.task_description).replace(/\n/g, "<br>")}</p>`
+					: `<p><em>${__("No description provided.")}</em></p>`;
+				return heading + body;
+			})
+			.join("<hr>");
+
+		const apply = () => frm.set_value("description", html);
+
+		if (frm.doc.description) {
+			frappe.confirm(__("This will replace the current Description. Continue?"), apply);
+		} else {
+			apply();
+		}
+	},
+});
+
+frappe.ui.form.on("Deployment Plan ClickUp Task", {
+	task_ref(frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (!row.task_ref) {
+			return;
+		}
+
+		// The link/ID text changed — clear the stale cached fetch, if any.
+		["task_id", "task_name", "task_status", "task_url", "task_description"].forEach((fieldname) => {
+			frappe.model.set_value(cdt, cdn, fieldname, "");
+		});
+
 		frappe.call({
 			method: "entre_erp.integrations.clickup.get_task",
-			args: { task_ref: frm.doc.clickup_task_ref },
+			args: { task_ref: row.task_ref },
 			freeze: true,
 			freeze_message: __("Fetching from ClickUp..."),
 			callback(r) {
 				if (!r.message) return;
 				const task = r.message;
-				frm.set_value("clickup_task_id", task.task_id);
-				frm.set_value("clickup_task_name", task.name);
-				frm.set_value("clickup_task_status", task.status);
-				frm.set_value(
-					"clickup_task_html",
-					`<a href="${task.url}" target="_blank">${__("Open in ClickUp")} ↗</a>`
-				);
-				frappe.show_alert({ message: __("ClickUp task linked."), indicator: "green" });
+				frappe.model.set_value(cdt, cdn, "task_id", task.task_id);
+				frappe.model.set_value(cdt, cdn, "task_name", task.name);
+				frappe.model.set_value(cdt, cdn, "task_status", task.status);
+				frappe.model.set_value(cdt, cdn, "task_url", task.url);
+				frappe.model.set_value(cdt, cdn, "task_description", task.description);
 			},
 		});
 	},

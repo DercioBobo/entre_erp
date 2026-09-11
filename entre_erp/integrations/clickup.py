@@ -63,5 +63,15 @@ def get_task(task_ref):
 		"task_id": data.get("id"),
 		"name": data.get("name"),
 		"status": (data.get("status") or {}).get("status"),
-		"url": data.get("url"),
+		"description": data.get("text_content"),
+		"url": build_task_url(data.get("id"), data.get("url")),
 	}
+
+
+def build_task_url(task_id, fallback_url=None):
+	"""Build a task's link from the configured prefix; fall back to whatever
+	ClickUp's API itself reported if no prefix is configured."""
+	prefix = frappe.db.get_single_value("ClickUp Settings", "task_url_prefix")
+	if prefix:
+		return f"{prefix}{task_id}"
+	return fallback_url
