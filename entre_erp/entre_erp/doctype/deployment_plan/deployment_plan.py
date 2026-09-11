@@ -10,6 +10,7 @@ class DeploymentPlan(Document):
 		self._validate_people_have_tech_role()
 		self._validate_approver_has_tech_lead_role()
 		self._validate_clickup_tasks()
+		self._validate_outcome_matches_workflow_state()
 
 	def on_update(self):
 		self._sync_clickup_status_on_done()
@@ -63,6 +64,32 @@ class DeploymentPlan(Document):
 					),
 					title=_("ClickUp Task Not Verified"),
 				)
+
+	def _validate_outcome_matches_workflow_state(self):
+		"""Outcome becomes mandatory once execution is over (see
+		mandatory_depends_on on the field itself); this just blocks a
+		contradictory pairing once one is chosen — e.g. Done + Failed."""
+		if not self.outcome:
+			return
+
+		positive = self.outcome in ("Success", "Success with Issues")
+		negative = self.outcome in ("Rolled Back", "Failed")
+
+		if self.workflow_state == "Done" and negative:
+			frappe.throw(
+				_("Outcome {0} doesn't match a {1} deployment. Use Roll Back instead, or change the Outcome.").format(
+					frappe.bold(self.outcome), frappe.bold("Done")
+				),
+				title=_("Outcome Doesn't Match Status"),
+			)
+
+		if self.workflow_state == "Rolled Back" and positive:
+			frappe.throw(
+				_("Outcome {0} doesn't match a {1} deployment. Use Mark as Done instead, or change the Outcome.").format(
+					frappe.bold(self.outcome), frappe.bold("Rolled Back")
+				),
+				title=_("Outcome Doesn't Match Status"),
+			)
 
 	def _sync_clickup_status_on_done(self):
 		"""Push the ClickUp status update exactly once, on the transition

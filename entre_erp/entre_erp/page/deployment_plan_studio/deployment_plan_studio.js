@@ -354,8 +354,9 @@ class DeploymentPlanStudio {
 			doc.rollback_plan
 		);
 
-		// Outcome -----------------------------------------------------------
+		// Outcome — only relevant once execution has actually started -----
 		const $outcome = this.make_section($editor, __("Outcome"));
+		$outcome.toggle(["Approved", "Done", "Rolled Back"].includes(doc.workflow_state));
 		const $orow = $('<div class="dp-field-row"></div>').appendTo($outcome);
 		this.controls.outcome = this.make_field(
 			$orow,
