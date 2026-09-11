@@ -41,13 +41,13 @@
    {
     "doctype": "Workflow Document State",
     "state": "Rejected",
-    "doc_status": "2",
+    "doc_status": "0",
     "allow_edit": "System Manager"
    },
    {
     "doctype": "Workflow Document State",
     "state": "Cancelled",
-    "doc_status": "2",
+    "doc_status": "0",
     "allow_edit": "System Manager"
    }
   ],
