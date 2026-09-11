@@ -590,7 +590,11 @@ class DeploymentPlanStudio {
 										.join("")
 								)
 								.show();
-							$suggest.find(".dp-suggest-item").on("click", function () {
+							// mousedown, not click: fires before the input's blur, so
+							// picking a suggestion wins the race against the blur
+							// handler trying to fetch the still-partial typed text.
+							$suggest.find(".dp-suggest-item").on("mousedown", function (e) {
+								e.preventDefault();
 								resolve_row(idx, $(this).data("task-id"));
 								$suggest.hide();
 							});
@@ -700,7 +704,8 @@ class DeploymentPlanStudio {
 									.join("")
 							)
 							.show();
-						$suggest.find(".dp-suggest-item").on("click", function () {
+						$suggest.find(".dp-suggest-item").on("mousedown", function (e) {
+							e.preventDefault();
 							const name = $(this).data("name");
 							const full_name = $(this).data("full-name");
 							if (!state.users.find((u) => u.name === name)) {

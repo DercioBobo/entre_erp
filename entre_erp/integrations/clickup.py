@@ -7,6 +7,7 @@ from frappe.utils.password import get_decrypted_password
 
 CLICKUP_API_BASE = "https://api.clickup.com/api/v2"
 TASK_URL_PATTERN = re.compile(r"clickup\.com/t/([a-zA-Z0-9-]+)")
+TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 
 
 def get_api_token():
@@ -32,8 +33,13 @@ def extract_task_id(task_ref):
 	if match:
 		return match.group(1)
 
-	if "/" in task_ref or " " in task_ref:
-		frappe.throw(_("Could not find a task ID in {0}.").format(frappe.bold(task_ref)))
+	if not TASK_ID_PATTERN.match(task_ref):
+		frappe.throw(
+			_("{0} doesn't look like a ClickUp task link or ID. Paste the full link, or pick a result from the search suggestions.").format(
+				frappe.bold(task_ref)
+			),
+			title=_("Not a ClickUp Task"),
+		)
 
 	return task_ref
 
