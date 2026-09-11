@@ -94,14 +94,13 @@ class DeploymentPlan(Document):
 	def _sync_clickup_status_on_done(self):
 		"""Push the ClickUp status update exactly once, on the transition
 		into Done — not on every later save while already Done (e.g. adding
-		Outcome Notes afterward)."""
-		if self.workflow_state != "Done":
-			return
-
-		before_save = self.get_doc_before_save()
-		if before_save and before_save.workflow_state == "Done":
+		Outcome Notes afterward). Uses a persisted flag rather than comparing
+		against get_doc_before_save(), which doesn't reliably reflect the
+		pre-transition state for a same-docstatus workflow save."""
+		if self.workflow_state != "Done" or self.clickup_synced_on_done:
 			return
 
 		from entre_erp.integrations.clickup import sync_tasks_to_done
 
 		sync_tasks_to_done(self)
+		self.db_set("clickup_synced_on_done", 1, update_modified=False)

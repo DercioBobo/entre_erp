@@ -35,7 +35,8 @@
   "rollback_plan",
   "section_break_outcome",
   "outcome",
-  "outcome_notes"
+  "outcome_notes",
+  "clickup_synced_on_done"
  ],
  "fields": [
   {
@@ -232,6 +233,16 @@
    "fieldtype": "Small Text",
    "label": "Outcome Notes",
    "mandatory_depends_on": "eval:doc.outcome=='Rolled Back' || doc.outcome=='Failed'"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "clickup_synced_on_done",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "ClickUp Synced on Done",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "is_submittable": 1,
