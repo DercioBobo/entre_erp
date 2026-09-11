@@ -15,6 +15,12 @@ class DeploymentPlan(Document):
 	def on_update(self):
 		self._sync_clickup_status_on_done()
 
+	def on_update_after_submit(self):
+		# Approved -> Done (and -> Rolled Back) update an already-submitted
+		# doc (docstatus stays 1) — Frappe routes that through this hook,
+		# not on_update, since only allow_on_submit fields are changing.
+		self._sync_clickup_status_on_done()
+
 	# ------------------------------------------------------------------
 	# Private
 	# ------------------------------------------------------------------
@@ -94,29 +100,11 @@ class DeploymentPlan(Document):
 	def _sync_clickup_status_on_done(self):
 		"""Push the ClickUp status update exactly once, on the transition
 		into Done — not on every later save while already Done (e.g. adding
-		Outcome Notes afterward). Uses a persisted flag rather than comparing
-		against get_doc_before_save(), which doesn't reliably reflect the
-		pre-transition state for a same-docstatus workflow save."""
-		# TEMPORARY DEBUG — remove once the sync is confirmed firing correctly.
-		frappe.msgprint(
-			"[debug] on_update reached. workflow_state={0!r} clickup_synced_on_done={1!r} "
-			"clickup_tasks={2!r}".format(
-				self.workflow_state,
-				self.clickup_synced_on_done,
-				[(r.task_id, r.task_name) for r in (self.clickup_tasks or [])],
-			),
-			title="ClickUp Sync Debug",
-		)
-
+		Outcome Notes afterward)."""
 		if self.workflow_state != "Done" or self.clickup_synced_on_done:
 			return
 
 		from entre_erp.integrations.clickup import sync_tasks_to_done
 
-		try:
-			sync_tasks_to_done(self)
-			self.db_set("clickup_synced_on_done", 1, update_modified=False)
-		except Exception:
-			# TEMPORARY DEBUG — surface the real exception instead of it
-			# vanishing into wherever it's currently vanishing.
-			frappe.msgprint(frappe.get_traceback(), title="ClickUp Sync Exception (debug)")
+		sync_tasks_to_done(self)
+		self.db_set("clickup_synced_on_done", 1, update_modified=False)
