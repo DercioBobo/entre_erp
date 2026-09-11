@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.desk.search import validate_and_sanitize_search_inputs
+from frappe.model.workflow import get_transitions
 from frappe.utils import cint
 
 
@@ -33,3 +34,16 @@ def get_users_by_role(doctype, txt, searchfield, start, page_len, filters):
             "page_len": cint(page_len),
         },
     )
+
+
+@frappe.whitelist()
+def get_deployment_plan_transitions(name):
+    """Workflow actions the current user may take on this Deployment Plan
+    right now — used by the Deployment Plan Studio page to render action
+    buttons instead of the desk's own workflow button."""
+    doc = frappe.get_doc("Deployment Plan", name)
+    doc.check_permission("read")
+    return [
+        {"action": t.action, "next_state": t.next_state}
+        for t in get_transitions(doc)
+    ]
