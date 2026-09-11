@@ -7,7 +7,7 @@ function build_clickup_description_html(tasks) {
 			const heading = `<h4>${frappe.utils.escape_html(row.task_name)}</h4>`;
 			const body = row.task_description
 				? `<p>${frappe.utils.escape_html(row.task_description).replace(/\n/g, "<br>")}</p>`
-				: `<p><em>${__("No description provided.")}</em></p>`;
+				: "";
 			return heading + body;
 		})
 		.join("<hr>");

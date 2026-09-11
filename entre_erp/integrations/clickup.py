@@ -185,20 +185,22 @@ def sync_tasks_to_done(doc):
 	if not done_status:
 		return
 
+	rows_with_id = [row for row in (doc.clickup_tasks or []) if row.task_id]
+	if not rows_with_id:
+		return
+
 	failed = []
-	for row in doc.clickup_tasks or []:
-		if not row.task_id:
-			continue
+	for row in rows_with_id:
 		try:
 			update_task_status(row.task_id, done_status)
 			row.db_set("task_status", done_status, update_modified=False)
-		except Exception:
-			frappe.log_error(title="ClickUp status sync failed")
-			failed.append(row.task_name or row.task_id)
+		except Exception as e:
+			frappe.log_error(title="ClickUp status sync failed", message=frappe.get_traceback())
+			failed.append(f"{row.task_name or row.task_id} — {e}")
 
 	if failed:
 		frappe.msgprint(
-			_("Could not update ClickUp status for: {0}").format(", ".join(failed)),
-			title=_("ClickUp Sync Issue"),
+			"<br>".join(frappe.utils.escape_html(line) for line in failed),
+			title=_("Could Not Update ClickUp Status"),
 			indicator="orange",
 		)
