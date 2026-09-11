@@ -1,3 +1,5 @@
+import json
+
 import frappe
 from frappe import _
 from frappe.desk.search import validate_and_sanitize_search_inputs
@@ -11,7 +13,13 @@ def get_users_by_role(doctype, txt, searchfield, start, page_len, filters):
     """Link query for Deployment Plan's people fields — Users with a given role.
 
     `filters` must include {"role": "<Role Name>"} (e.g. "Tech", "Tech Lead").
+    Called both via the standard Link-search endpoint (filters arrives as a
+    dict, already decoded) and directly via frappe.call from the People
+    pickers (filters arrives as a JSON string) — accept either.
     """
+    if isinstance(filters, str):
+        filters = json.loads(filters) if filters else None
+
     role = filters.get("role") if filters else None
     if not role:
         frappe.throw(_("A role filter is required."))
