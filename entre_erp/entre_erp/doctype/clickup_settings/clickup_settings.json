@@ -5,7 +5,8 @@
  "engine": "InnoDB",
  "field_order": [
   "api_token",
-  "task_url_prefix"
+  "task_url_prefix",
+  "allowed_statuses"
  ],
  "fields": [
   {
@@ -22,6 +23,12 @@
    "fieldtype": "Data",
    "label": "Task URL Prefix",
    "reqd": 1
+  },
+  {
+   "description": "One ClickUp status per line (case-insensitive), e.g. \"Ready for Deploy\". Only tasks in one of these statuses can be fetched into a Deployment Plan. Leave empty to allow any status.",
+   "fieldname": "allowed_statuses",
+   "fieldtype": "Small Text",
+   "label": "Allowed Statuses"
   }
  ],
  "issingle": 1,

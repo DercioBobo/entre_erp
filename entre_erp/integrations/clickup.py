@@ -59,10 +59,14 @@ def get_task(task_ref):
 		frappe.throw(_("ClickUp API error ({0}): {1}").format(response.status_code, response.text[:200]))
 
 	data = response.json()
+	name = data.get("name")
+	status = (data.get("status") or {}).get("status")
+	validate_task_status(name, status)
+
 	return {
 		"task_id": data.get("id"),
-		"name": data.get("name"),
-		"status": (data.get("status") or {}).get("status"),
+		"name": name,
+		"status": status,
 		"description": data.get("text_content"),
 		"url": build_task_url(data.get("id"), data.get("url")),
 	}
@@ -75,3 +79,24 @@ def build_task_url(task_id, fallback_url=None):
 	if prefix:
 		return f"{prefix}{task_id}"
 	return fallback_url
+
+
+def get_allowed_statuses():
+	raw = frappe.db.get_single_value("ClickUp Settings", "allowed_statuses") or ""
+	return [line.strip().lower() for line in raw.splitlines() if line.strip()]
+
+
+def validate_task_status(task_name, status):
+	"""Block fetching a task whose ClickUp status isn't on the configured
+	allowlist. No allowlist configured = any status is fine."""
+	allowed = get_allowed_statuses()
+	if not allowed:
+		return
+
+	if (status or "").strip().lower() not in allowed:
+		frappe.throw(
+			_("{0} is in status {1}, which isn't allowed here. Allowed statuses: {2}.").format(
+				frappe.bold(task_name), frappe.bold(status or _("(none)")), ", ".join(allowed)
+			),
+			title=_("ClickUp Status Not Allowed"),
+		)
