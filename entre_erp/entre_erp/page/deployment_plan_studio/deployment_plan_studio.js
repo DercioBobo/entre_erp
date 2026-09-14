@@ -498,6 +498,7 @@ class DeploymentPlanStudio {
 		// Resolve a row's ref (a pasted link/ID, or a task ID picked from the
 		// search suggestions below) into a fully-fetched task.
 		const resolve_row = (idx, val) => {
+			const previous_status = rows[idx].task_status;
 			Object.assign(rows[idx], { task_ref: val, task_id: "", task_name: "", task_status: "", task_url: "", task_description: "" });
 			if (!val) {
 				render();
@@ -517,6 +518,12 @@ class DeploymentPlanStudio {
 							task_url: r.message.url,
 							task_description: r.message.description,
 						});
+						if (previous_status && r.message.status && previous_status !== r.message.status) {
+							frappe.show_alert({
+								message: __("{0}: status changed to {1}", [r.message.name, r.message.status]),
+								indicator: "blue",
+							});
+						}
 					}
 					render();
 					this.apply_description(true);
@@ -749,7 +756,7 @@ class DeploymentPlanStudio {
 			freeze: true,
 			freeze_message: __("Updating..."),
 			callback: (r) => {
-				frappe.show_alert({ message: __("Updated."), indicator: "green" });
+				frappe.show_alert({ message: __("Moved to {0}", [r.message.workflow_state]), indicator: "green" });
 				this.show_editor(r.message.name);
 			},
 		});

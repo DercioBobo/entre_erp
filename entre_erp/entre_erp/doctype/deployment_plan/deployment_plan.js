@@ -146,6 +146,13 @@ frappe.ui.form.on("Deployment Plan", {
 			);
 			frm.__clickup_search_button_added = true;
 		}
+
+		if (frm.__prev_workflow_state === undefined) {
+			frm.__prev_workflow_state = frm.doc.workflow_state;
+		} else if (frm.__prev_workflow_state !== frm.doc.workflow_state) {
+			frappe.show_alert({ message: __("Moved to {0}", [frm.doc.workflow_state]), indicator: "green" });
+			frm.__prev_workflow_state = frm.doc.workflow_state;
+		}
 	},
 
 	generate_description(frm) {
@@ -164,6 +171,8 @@ frappe.ui.form.on("Deployment Plan ClickUp Task", {
 			apply_clickup_description(frm, { silent: true });
 			return;
 		}
+
+		const previous_status = row.task_status;
 
 		// The link/ID text changed — clear the stale cached fetch, if any.
 		["task_id", "task_name", "task_status", "task_url", "task_description"].forEach((fieldname) => {
@@ -184,6 +193,13 @@ frappe.ui.form.on("Deployment Plan ClickUp Task", {
 				frappe.model.set_value(cdt, cdn, "task_url", task.url);
 				frappe.model.set_value(cdt, cdn, "task_description", task.description);
 				apply_clickup_description(frm, { silent: true });
+
+				if (previous_status && task.status && previous_status !== task.status) {
+					frappe.show_alert({
+						message: __("{0}: status changed to {1}", [task.name, task.status]),
+						indicator: "blue",
+					});
+				}
 			},
 		});
 	},
