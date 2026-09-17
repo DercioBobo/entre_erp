@@ -15,9 +15,11 @@ function build_clickup_description_html(tasks) {
 
 // Manual (button click, always offers to overwrite) and automatic (silent,
 // only fills in while the description hasn't been hand-edited since the
-// last auto-fill) share this. `frm._dp_last_generated` tracks the last
-// value *we* wrote, so a manual edit in between stops silent overwrites
-// until the user clicks the button again.
+// last auto-fill) share this. `clickup_description_snapshot` (a hidden,
+// persisted field) tracks the last value *we* wrote, so a manual edit in
+// between stops silent overwrites until the user clicks the button again —
+// and unlike an in-memory flag, this survives a page reload, which is what
+// lets the silent path also run from `before_save` below.
 function apply_clickup_description(frm, { silent } = {}) {
 	const html = build_clickup_description_html(frm.doc.clickup_tasks);
 	if (!html) {
@@ -27,10 +29,10 @@ function apply_clickup_description(frm, { silent } = {}) {
 
 	const apply = () => {
 		frm.set_value("description", html);
-		frm._dp_last_generated = html;
+		frm.set_value("clickup_description_snapshot", html);
 	};
 
-	const untouched = !frm.doc.description || frm.doc.description === frm._dp_last_generated;
+	const untouched = !frm.doc.description || frm.doc.description === frm.doc.clickup_description_snapshot;
 
 	if (silent) {
 		if (untouched) apply();
@@ -160,6 +162,14 @@ frappe.ui.form.on("Deployment Plan", {
 	},
 
 	clickup_tasks_remove(frm) {
+		apply_clickup_description(frm, { silent: true });
+	},
+
+	// Catches anyone who added/changed ClickUp tasks and just hit Save
+	// without clicking "Generate Description" again — runs before Frappe's
+	// client-side mandatory-field check, so it also fills in a still-empty
+	// Description instead of blocking the save.
+	before_save(frm) {
 		apply_clickup_description(frm, { silent: true });
 	},
 });

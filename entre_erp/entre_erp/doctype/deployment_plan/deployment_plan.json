@@ -22,6 +22,7 @@
   "outage_details",
   "section_break_desc",
   "description",
+  "clickup_description_snapshot",
   "section_break_people",
   "implemented_by",
   "standby",
@@ -148,6 +149,15 @@
    "fieldtype": "Text Editor",
    "label": "Description",
    "reqd": 1
+  },
+  {
+   "fieldname": "clickup_description_snapshot",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "ClickUp Description Snapshot",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
   },
   {
    "fieldname": "section_break_people",

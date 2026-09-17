@@ -1,3 +1,5 @@
+import html
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -5,6 +7,7 @@ from frappe.model.document import Document
 
 class DeploymentPlan(Document):
 	def validate(self):
+		self._sync_description_from_clickup_tasks()
 		self._validate_outage_details()
 		self._validate_git_references()
 		self._validate_people_have_tech_role()
@@ -24,6 +27,32 @@ class DeploymentPlan(Document):
 	# ------------------------------------------------------------------
 	# Private
 	# ------------------------------------------------------------------
+
+	def _sync_description_from_clickup_tasks(self):
+		"""Server-side mirror of the client's silent auto-fill (see
+		deployment_plan.js) — a safety net for saves that don't go through
+		that form (API, Data Import, bench console), so Description can't go
+		stale just because nobody clicked "Generate Description" again."""
+		fresh_html = self._build_clickup_description_html()
+		if not fresh_html:
+			return
+
+		untouched = not self.description or self.description == self.clickup_description_snapshot
+		if untouched:
+			self.description = fresh_html
+			self.clickup_description_snapshot = fresh_html
+
+	def _build_clickup_description_html(self):
+		fetched = [row for row in (self.get("clickup_tasks") or []) if row.task_name]
+		if not fetched:
+			return None
+
+		parts = []
+		for row in fetched:
+			heading = f"<h4>{html.escape(row.task_name)}</h4>"
+			body = f"<p>{html.escape(row.task_description).replace(chr(10), '<br>')}</p>" if row.task_description else ""
+			parts.append(heading + body)
+		return "<hr>".join(parts)
 
 	def _validate_outage_details(self):
 		if self.causes_service_outage and not self.outage_details:
