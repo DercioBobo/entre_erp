@@ -288,6 +288,7 @@
    "report": 1,
    "role": "System User",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
@@ -299,6 +300,7 @@
    "report": 1,
    "role": "Tech",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {

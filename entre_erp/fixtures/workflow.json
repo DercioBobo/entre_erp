@@ -57,42 +57,48 @@
     "state": "Draft",
     "action": "Submit for Approval",
     "next_state": "Pending Approval",
-    "allowed": "Tech"
+    "allowed": "Tech",
+    "allow_self_approval": 1
    },
    {
     "doctype": "Workflow Transition",
     "state": "Draft",
     "action": "Cancel",
     "next_state": "Cancelled",
-    "allowed": "Tech"
+    "allowed": "Tech",
+    "allow_self_approval": 1
    },
    {
     "doctype": "Workflow Transition",
     "state": "Pending Approval",
     "action": "Approve",
     "next_state": "Approved",
-    "allowed": "Tech Lead"
+    "allowed": "Tech Lead",
+    "allow_self_approval": 1
    },
    {
     "doctype": "Workflow Transition",
     "state": "Pending Approval",
     "action": "Reject",
     "next_state": "Rejected",
-    "allowed": "Tech Lead"
+    "allowed": "Tech Lead",
+    "allow_self_approval": 1
    },
    {
     "doctype": "Workflow Transition",
     "state": "Approved",
     "action": "Mark as Done",
     "next_state": "Done",
-    "allowed": "Tech"
+    "allowed": "Tech",
+    "allow_self_approval": 1
    },
    {
     "doctype": "Workflow Transition",
     "state": "Approved",
     "action": "Roll Back",
     "next_state": "Rolled Back",
-    "allowed": "Tech"
+    "allowed": "Tech",
+    "allow_self_approval": 1
    }
   ]
  }
