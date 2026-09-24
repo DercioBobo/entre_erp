@@ -7,6 +7,8 @@ from entre_erp.pagamentos import (
 	ESTADO_PAGO,
 	ESTADO_PROXIMO_MES,
 	ESTADOS_FORA_DO_MES,
+	ESTADOS_LIQUIDADOS,
+	bloqueio_do_mes_anterior,
 	mes_anterior,
 	mes_seguinte,
 	nome_plano,
@@ -24,6 +26,9 @@ class PlanodePagamentos(Document):
 		self.titulo = f"{self.mes} {self.ano}" if self.tipo == "Mensal" else f"Investimentos {self.ano}"
 		self._preencher_linhas()
 		self._calcular_totais()
+		self._validar_mes_anterior_liquidado()
+		self._fechar_quando_liquidado()
+		self._validar_fecho()
 
 	def on_update(self):
 		self._sincronizar_proximo_mes()
@@ -111,6 +116,55 @@ class PlanodePagamentos(Document):
 	# Private
 	# ------------------------------------------------------------------
 
+	def _linhas_por_liquidar(self, linhas=None):
+		return [r for r in (self.linhas if linhas is None else linhas) if r.estado not in ESTADOS_LIQUIDADOS]
+
+	def _validar_mes_anterior_liquidado(self):
+		if self.tipo != "Mensal" or self.flags.ignorar_bloqueio:
+			return
+		bloqueio = bloqueio_do_mes_anterior(self.ano, self.mes)
+		if bloqueio:
+			frappe.throw(
+				_(
+					"{0} ainda tem {1} pagamento(s) por liquidar ({2}). Pague, cancele ou mova-os para "
+					"Próximo Mês antes de trabalhar em {3}."
+				).format(
+					frappe.bold(bloqueio["titulo"]),
+					bloqueio["pendentes"],
+					frappe.format_value(bloqueio["valor"], {"fieldtype": "Currency"}),
+					self.titulo,
+				),
+				title=_("Mês anterior por liquidar"),
+			)
+
+	def _fechar_quando_liquidado(self):
+		"""Closes a month the moment its last line gets settled. Only on that
+		change, so a month reopened on purpose (to add a late bill) is not
+		closed again until something new in it gets settled."""
+		if self.tipo != "Mensal" or self.estado == "Fechado" or not self.linhas:
+			return
+		if self._linhas_por_liquidar():
+			return
+		antes = self.get_doc_before_save()
+		if not antes or not self._linhas_por_liquidar(antes.linhas):
+			return
+		self.estado = "Fechado"
+		self.flags.fechado_automaticamente = True
+
+	def _validar_fecho(self):
+		if self.estado != "Fechado":
+			return
+		por_liquidar = self._linhas_por_liquidar()
+		if por_liquidar:
+			frappe.throw(
+				_("Não pode fechar {0}: ainda há {1} linha(s) por liquidar ({2}).").format(
+					self.titulo,
+					len(por_liquidar),
+					", ".join(r.descricao for r in por_liquidar[:5]) + ("…" if len(por_liquidar) > 5 else ""),
+				),
+				title=_("Plano por liquidar"),
+			)
+
 	def _sincronizar_proximo_mes(self):
 		"""A line set to Próximo Mês moves (what is left unpaid) to next
 		month's plan, creating that plan if needed. While the copy is
@@ -177,6 +231,9 @@ class PlanodePagamentos(Document):
 				_("O plano de {0} está Fechado — reabra-o para mover linhas para lá.").format(titulo_destino)
 			)
 
+		# Moving lines is how this month gets settled, so it must work even
+		# though next month is still locked by this one.
+		destino.flags.ignorar_bloqueio = True
 		if existe:
 			destino.save()
 		else:

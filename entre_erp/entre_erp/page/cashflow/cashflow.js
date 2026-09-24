@@ -51,11 +51,11 @@ const ABA_RECORRENTES = "Recorrentes";
 const COLUNAS_PLANO = [
 	{ campo: "descricao", label: "Descrição", tipo: "text", largura: 260, fixa: true },
 	{ campo: "valor", label: "Valor", tipo: "num", largura: 120 },
-	{ campo: "prioridade", label: "Prior.", tipo: "select", largura: 70, opcoes: () => ["", "1", "2", "3", "4"] },
-	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, opcoes: () => ESTADOS },
+	{ campo: "prioridade", label: "Prior.", tipo: "select", largura: 90, filtro: true, opcoes: () => ["", "1", "2", "3", "4"] },
+	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, filtro: true, opcoes: () => ESTADOS },
 	{ campo: "valor_pago", label: "Valor Pago", tipo: "num", largura: 120 },
-	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 100, opcoes: (s) => [""].concat(s.metodos) },
-	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, opcoes: (s) => [""].concat(s.categorias) },
+	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 110, filtro: true, opcoes: (s) => [""].concat(s.metodos) },
+	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, filtro: true, opcoes: (s) => [""].concat(s.categorias) },
 	{ campo: "factura", label: "Factura", tipo: "text", largura: 150 },
 	{ campo: "observacoes", label: "Observações", tipo: "text", largura: 300 },
 ];
@@ -70,6 +70,8 @@ const COLUNAS_RECORRENTES = [
 	{ campo: "referencia", label: "Referência / NIB", tipo: "text", largura: 320 },
 	{ campo: "ativo", label: "Ativo", tipo: "check", largura: 60 },
 ];
+
+const ICONE_FILTRO = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg>`;
 
 const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
 const dinheiro = (v) => format_number(v || 0, null, 2);
@@ -101,6 +103,11 @@ class CashflowSheet {
 		this.categorias = [];
 		this.doc = null;
 		this.fila = Promise.resolve();
+		// Header filters { campo: Set of values }, kept while switching months
+		// so you can follow e.g. only STB across the year.
+		this.filtros = {};
+		this.so_por_pagar = false;
+		this.pesquisa = "";
 
 		inject_styles();
 		this.$body = $(page.body).empty().html(`
@@ -173,6 +180,7 @@ class CashflowSheet {
 	}
 
 	abrir_aba(aba) {
+		this.fechar_menu_filtro();
 		this.aba = aba;
 		this.doc = null;
 		this.$body.find(".cf-aba").removeClass("active").filter(`[data-aba="${aba}"]`).addClass("active");
@@ -222,13 +230,16 @@ class CashflowSheet {
 	render_plano(doc) {
 		this.doc = doc;
 		const fechado = doc.estado === "Fechado";
+		// Locked while last month still has lines to settle (see bloqueio_do_mes_anterior).
+		const bloqueio = doc.bloqueio;
+		const so_leitura = fechado || !!bloqueio;
 
 		this.$body.find(".cf-topo-acoes").html(`
-			<select class="form-control input-sm cf-estado-plano" title="${__("Estado do Plano")}">
+			<select class="form-control input-sm cf-estado-plano" title="${__("Estado do Plano")}" ${bloqueio ? "disabled" : ""}>
 				${ESTADOS_PLANO.map((e) => `<option ${e === doc.estado ? "selected" : ""}>${e}</option>`).join("")}
 			</select>
 			<div class="btn-group">
-				<button class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" ${fechado ? "disabled" : ""}>
+				<button class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" ${so_leitura ? "disabled" : ""}>
 					${__("Preencher")} <span class="caret"></span>
 				</button>
 				<ul class="dropdown-menu dropdown-menu-right">
@@ -246,32 +257,48 @@ class CashflowSheet {
 		this.$conteudo.html(`
 			<div class="cf-cabecalho"></div>
 			${fechado ? `<div class="cf-aviso-fechado">${__("Plano Fechado — mude o estado para Em Curso para editar.")}</div>` : ""}
+			${
+				bloqueio
+					? `<div class="cf-aviso-bloqueio">
+						<span>🔒 ${__("{0} ainda tem {1} pagamento(s) por liquidar ({2}). Pague, cancele ou mova-os para Próximo Mês — {3} fica disponível depois disso.", [
+							`<b>${esc(bloqueio.titulo)}</b>`,
+							bloqueio.pendentes,
+							dinheiro(bloqueio.valor),
+							esc(this.titulo_aba(this.aba)),
+						])}</span>
+						<button class="btn btn-primary btn-xs cf-ir-bloqueio">${__("Ir para {0}", [esc(bloqueio.mes)])} →</button>
+					</div>`
+					: ""
+			}
 			<div class="cf-filtros">
-				<input type="text" class="form-control input-sm cf-pesquisa" placeholder="${__("Pesquisar...")}">
-				<select class="form-control input-sm cf-filtro-estado">
-					<option value="">${__("Todos os estados")}</option>
-					<option value="__por_pagar">${__("Por pagar")}</option>
-					${ESTADOS.map((e) => `<option>${e}</option>`).join("")}
-				</select>
+				<input type="text" class="form-control input-sm cf-pesquisa" placeholder="${__("Pesquisar...")}" value="${esc(this.pesquisa)}">
+				<button class="btn btn-default btn-sm cf-por-pagar" title="${__("Só o que falta pagar")}">${__("Por pagar")}</button>
+				<button class="btn btn-link btn-sm cf-limpar-filtros">✕ ${__("Limpar filtros")}</button>
 				<span class="cf-contagem text-muted"></span>
 			</div>
 			<div class="cf-grelha-wrap">
 				<table class="cf-grelha">
 					<thead><tr>
 						<th class="cf-idx">#</th>
-						${COLUNAS_PLANO.map((c) => `<th class="${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}</th>`).join("")}
+						${COLUNAS_PLANO.map(
+							(c) => `<th class="${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}${
+								c.filtro
+									? `<button class="cf-filtro-btn" data-campo="${c.campo}" title="${__("Filtrar")}">${ICONE_FILTRO}</button>`
+									: ""
+							}</th>`,
+						).join("")}
 						<th style="min-width:110px"></th>
 					</tr></thead>
-					<tbody>${doc.linhas.map((row, i) => this.html_linha(row, i + 1, fechado)).join("")}</tbody>
+					<tbody>${doc.linhas.map((row, i) => this.html_linha(row, i + 1, so_leitura)).join("")}</tbody>
 					<tfoot>
 						${
-							fechado
+							so_leitura
 								? ""
 								: `<tr class="cf-nova"><td class="cf-idx">+</td><td class="cf-fixa" colspan="1">
 									<input class="cf-cell cf-nova-input" placeholder="${__("Nova despesa… (Enter)")}"></td>
 									<td colspan="${COLUNAS_PLANO.length}"></td></tr>`
 						}
-						<tr class="cf-total"><td></td><td class="cf-fixa">${__("TOTAL")}</td>
+						<tr class="cf-total"><td></td><td class="cf-fixa cf-total-label">${__("TOTAL")}</td>
 							<td class="cf-num cf-total-valor"></td><td></td><td></td>
 							<td class="cf-num cf-total-pago"></td><td colspan="${COLUNAS_PLANO.length - 4}"></td></tr>
 					</tfoot>
@@ -284,16 +311,16 @@ class CashflowSheet {
 		this.destacar_linha();
 	}
 
-	html_linha(row, idx, fechado) {
+	html_linha(row, idx, so_leitura) {
 		return `
 			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"}">
 				<td class="cf-idx">${idx}</td>
-				${COLUNAS_PLANO.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, fechado)}</td>`).join("")}
-				<td class="cf-acoes">${this.html_acoes(row, fechado)}</td>
+				${COLUNAS_PLANO.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura)}</td>`).join("")}
+				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
 			</tr>`;
 	}
 
-	html_acoes(row, fechado) {
+	html_acoes(row, so_leitura) {
 		let html = "";
 		if (this.doc.tipo === "Mensal" && row.estado === "Próximo Mês") {
 			const [, mes] = mes_seguinte(this.doc.ano, this.doc.mes);
@@ -303,7 +330,7 @@ class CashflowSheet {
 			const [, mes] = mes_anterior(this.doc.ano, this.doc.mes);
 			html += `<button class="cf-salto" data-ir="anterior" title="${__("Veio de {0} (Próximo Mês)", [mes])}">← ${curto(mes)}</button>`;
 		}
-		if (!fechado) html += `<button class="btn btn-xs btn-link cf-remover" title="${__("Remover linha")}">×</button>`;
+		if (!so_leitura) html += `<button class="btn btn-xs btn-link cf-remover" title="${__("Remover linha")}">×</button>`;
 		return html;
 	}
 
@@ -331,8 +358,8 @@ class CashflowSheet {
 				)
 				.join("")}</div>
 		`);
-		this.$conteudo.find(".cf-total-valor").text(dinheiro(p.total_previsto));
-		this.$conteudo.find(".cf-total-pago").text(dinheiro(p.total_pago));
+		this.cabecalho = p;
+		this.atualizar_rodape();
 
 		// Keep the tab dot in sync.
 		const resumo = this.planos[p.name];
@@ -365,6 +392,7 @@ class CashflowSheet {
 						this.atualizar_linha_na_grelha($tr, r.linha);
 						this.render_cabecalho(r.plano);
 						if (r.transporte) this.anunciar_transporte(r.transporte, r.linha.name);
+						if (r.plano.fechado_automaticamente) this.anunciar_fecho();
 					}),
 			);
 		});
@@ -411,6 +439,12 @@ class CashflowSheet {
 			);
 		});
 
+		$c.on("click", ".cf-ir-bloqueio", () => {
+			const b = this.doc.bloqueio;
+			this.ir_para(b.ano, b.mes, null);
+			this.so_por_pagar = true;
+		});
+
 		$c.on("click", ".cf-salto", (e) => {
 			const $tr = $(e.currentTarget).closest("tr");
 			if ($(e.currentTarget).attr("data-ir") === "seguinte") {
@@ -422,7 +456,25 @@ class CashflowSheet {
 			}
 		});
 
-		$c.on("input change", ".cf-pesquisa, .cf-filtro-estado", () => this.aplicar_filtros());
+		$c.on("input", ".cf-pesquisa", (e) => {
+			this.pesquisa = $(e.currentTarget).val();
+			this.aplicar_filtros();
+		});
+		$c.on("click", ".cf-por-pagar", () => {
+			this.so_por_pagar = !this.so_por_pagar;
+			this.aplicar_filtros();
+		});
+		$c.on("click", ".cf-limpar-filtros", () => {
+			this.filtros = {};
+			this.so_por_pagar = false;
+			this.pesquisa = "";
+			$c.find(".cf-pesquisa").val("");
+			this.aplicar_filtros();
+		});
+		$c.on("click", ".cf-filtro-btn", (e) => {
+			e.stopPropagation();
+			this.abrir_menu_filtro($(e.currentTarget));
+		});
 
 		const $acoes = this.$body.find(".cf-topo-acoes");
 		$acoes.find(".cf-estado-plano").on("change", (e) => {
@@ -513,31 +565,164 @@ class CashflowSheet {
 		});
 	}
 
+	anunciar_fecho() {
+		const [ano, mes] = mes_seguinte(this.doc.ano, this.doc.mes);
+		const $alerta = frappe.show_alert(
+			{
+				message: `✅ ${__("{0} 100% liquidado — plano fechado.", [esc(this.titulo_aba(this.aba))])}
+					<a class="cf-alerta-link">${__("Seguir para {0}", [mes])} →</a>`,
+				indicator: "green",
+			},
+			8,
+		);
+		$alerta && $alerta.find(".cf-alerta-link").on("click", () => this.ir_para(ano, mes, null));
+		this.abrir_aba(this.aba); // redraw read-only
+	}
+
+	filtros_ativos() {
+		return Object.keys(this.filtros).length + (this.so_por_pagar ? 1 : 0) + (this.pesquisa ? 1 : 0);
+	}
+
 	aplicar_filtros() {
-		const txt = (this.$conteudo.find(".cf-pesquisa").val() || "").toLowerCase();
-		const filtro = this.$conteudo.find(".cf-filtro-estado").val();
+		const txt = (this.pesquisa || "").toLowerCase();
 		let visiveis = 0;
 		const $linhas = this.$conteudo.find("tbody tr");
 
 		$linhas.each((_i, tr) => {
 			const $tr = $(tr);
-			const estado = $tr.find('[data-campo="estado"]').val();
-			const texto = $tr
-				.find("input.cf-cell")
-				.map((_j, el) => el.value)
-				.get()
-				.join(" ")
-				.toLowerCase();
-			const ok_estado =
-				!filtro ||
-				(filtro === "__por_pagar"
-					? estado !== "Pago" && !ESTADOS_FORA_DO_MES.includes(estado)
-					: estado === filtro);
-			const mostrar = ok_estado && (!txt || texto.includes(txt));
+			const valor = (campo) => $tr.find(`[data-campo="${campo}"]`).val() || "";
+			const estado = valor("estado");
+
+			let mostrar = !this.so_por_pagar || (estado !== "Pago" && !ESTADOS_FORA_DO_MES.includes(estado));
+			for (const [campo, aceites] of Object.entries(this.filtros)) {
+				if (!aceites.has(valor(campo))) mostrar = false;
+			}
+			if (mostrar && txt) {
+				const texto = $tr
+					.find("input.cf-cell")
+					.map((_j, el) => el.value)
+					.get()
+					.join(" ")
+					.toLowerCase();
+				mostrar = texto.includes(txt);
+			}
 			$tr.toggle(mostrar);
 			if (mostrar) visiveis++;
 		});
+
+		this.$conteudo.find(".cf-filtro-btn").each((_i, el) => {
+			$(el).toggleClass("ativo", !!this.filtros[el.getAttribute("data-campo")]);
+		});
+		this.$conteudo
+			.find(".cf-por-pagar")
+			.toggleClass("btn-primary", this.so_por_pagar)
+			.toggleClass("btn-default", !this.so_por_pagar);
+		this.$conteudo.find(".cf-limpar-filtros").toggle(this.filtros_ativos() > 0);
 		this.$conteudo.find(".cf-contagem").text(__("{0} de {1} linhas", [visiveis, $linhas.length]));
+		this.atualizar_rodape();
+	}
+
+	// TOTAL row: the plan totals, or — while filtering — the total of the
+	// visible lines only (like Excel's SUBTOTAL on a filtered table).
+	atualizar_rodape() {
+		const $valor = this.$conteudo.find(".cf-total-valor");
+		const $pago = this.$conteudo.find(".cf-total-pago");
+		const $label = this.$conteudo.find(".cf-total-label");
+		if (!this.filtros_ativos()) {
+			const p = this.cabecalho || this.doc;
+			$label.text(__("TOTAL"));
+			$valor.text(dinheiro(p.total_previsto));
+			$pago.text(dinheiro(p.total_pago));
+			return;
+		}
+
+		let total = 0;
+		let pago = 0;
+		this.$conteudo.find("tbody tr:visible").each((_i, tr) => {
+			const $tr = $(tr);
+			const valor_pago = flt($tr.find('[data-campo="valor_pago"]').val());
+			const estado = $tr.find('[data-campo="estado"]').val();
+			total += ESTADOS_FORA_DO_MES.includes(estado) ? valor_pago : flt($tr.find('[data-campo="valor"]').val());
+			pago += valor_pago;
+		});
+		$label.text(__("TOTAL (filtrado)"));
+		$valor.text(dinheiro(total));
+		$pago.text(dinheiro(pago));
+	}
+
+	abrir_menu_filtro($btn) {
+		const campo = $btn.attr("data-campo");
+		const aberto = this.$menu_filtro && this.$menu_filtro.attr("data-campo") === campo;
+		this.fechar_menu_filtro();
+		if (aberto) return;
+
+		const coluna = COLUNAS_PLANO.find((c) => c.campo === campo);
+		const contagem = new Map();
+		this.$conteudo.find(`tbody [data-campo="${campo}"]`).each((_i, el) => {
+			const v = el.value || "";
+			contagem.set(v, (contagem.get(v) || 0) + 1);
+		});
+		// Same order as the column's dropdown, then anything else found.
+		const ordem = coluna.opcoes(this).filter((v) => contagem.has(v));
+		const valores = ordem.concat([...contagem.keys()].filter((v) => !ordem.includes(v)));
+		const aceites = this.filtros[campo];
+		const marcado = (v) => !aceites || aceites.has(v);
+
+		const $menu = $(`
+			<div class="cf-filtro-menu" data-campo="${campo}">
+				<div class="cf-filtro-titulo">${__(coluna.label)}</div>
+				<label class="cf-filtro-op cf-filtro-todos">
+					<input type="checkbox" ${!aceites ? "checked" : ""}> ${__("(Selecionar tudo)")}
+				</label>
+				<div class="cf-filtro-lista">${valores
+					.map(
+						(v) => `<label class="cf-filtro-op">
+							<input type="checkbox" value="${esc(v)}" ${marcado(v) ? "checked" : ""}>
+							<span>${v ? esc(v) : `<i class="text-muted">${__("(vazio)")}</i>`}</span>
+							<span class="cf-filtro-n">${contagem.get(v)}</span>
+						</label>`,
+					)
+					.join("")}</div>
+				<div class="cf-filtro-rodape">
+					<button class="btn btn-xs btn-default cf-filtro-limpar">${__("Limpar filtro")}</button>
+				</div>
+			</div>
+		`).appendTo(document.body);
+
+		const r = $btn[0].getBoundingClientRect();
+		$menu.css({ top: r.bottom + 4, left: Math.max(8, Math.min(r.left - 8, window.innerWidth - 260)) });
+
+		const aplicar = () => {
+			const $ops = $menu.find(".cf-filtro-lista input");
+			const escolhidos = new Set($ops.filter(":checked").map((_i, el) => el.value).get());
+			if (escolhidos.size === $ops.length) delete this.filtros[campo];
+			else this.filtros[campo] = escolhidos;
+			$menu.find(".cf-filtro-todos input").prop("checked", escolhidos.size === $ops.length);
+			this.aplicar_filtros();
+		};
+		$menu.on("change", ".cf-filtro-lista input", aplicar);
+		$menu.find(".cf-filtro-todos input").on("change", (e) => {
+			$menu.find(".cf-filtro-lista input").prop("checked", $(e.currentTarget).is(":checked"));
+			aplicar();
+		});
+		$menu.find(".cf-filtro-limpar").on("click", () => {
+			delete this.filtros[campo];
+			this.aplicar_filtros();
+			this.fechar_menu_filtro();
+		});
+
+		this.$menu_filtro = $menu;
+		$(document).on("mousedown.cf-filtro", (e) => {
+			if (!$(e.target).closest(".cf-filtro-menu, .cf-filtro-btn").length) this.fechar_menu_filtro();
+		});
+		$(document).on("keydown.cf-filtro", (e) => e.key === "Escape" && this.fechar_menu_filtro());
+		this.$conteudo.find(".cf-grelha-wrap").one("scroll", () => this.fechar_menu_filtro());
+	}
+
+	fechar_menu_filtro() {
+		if (this.$menu_filtro) this.$menu_filtro.remove();
+		this.$menu_filtro = null;
+		$(document).off(".cf-filtro");
 	}
 
 	// Saves run one at a time, in order, like typing in a spreadsheet. On
@@ -900,6 +1085,11 @@ function inject_styles() {
 		.cf-vazio { padding: 60px 20px; text-align: center; color: var(--text-muted); }
 		.cf-vazio p { margin-bottom: 12px; }
 		.cf-ajuda { margin-bottom: 10px; }
+		.cf-aviso-bloqueio {
+			display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+			padding: 10px 14px; margin-bottom: 10px; border-radius: 8px; font-size: 13px;
+			border: 1px solid var(--cf-laranja); background: rgba(217, 119, 6, 0.08);
+		}
 		.cf-aviso-fechado {
 			padding: 8px 12px; margin-bottom: 10px; border-radius: 6px;
 			background: var(--bg-light-gray, var(--bg-color)); color: var(--text-muted); font-size: 13px;
@@ -926,7 +1116,26 @@ function inject_styles() {
 
 		.cf-filtros { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 		.cf-filtros .cf-pesquisa { max-width: 260px; }
-		.cf-filtros .cf-filtro-estado { max-width: 190px; }
+		.cf-limpar-filtros { color: var(--text-muted); }
+
+		.cf-filtro-btn {
+			border: 0; background: transparent; color: var(--text-muted); opacity: 0.55;
+			margin-left: 6px; padding: 2px 4px; border-radius: 4px; line-height: 1; vertical-align: middle;
+		}
+		.cf-filtro-btn:hover { opacity: 1; background: var(--control-bg); }
+		.cf-filtro-btn.ativo { opacity: 1; color: #fff; background: var(--primary); }
+		.cf-filtro-menu {
+			position: fixed; z-index: 1030; width: 250px; padding: 8px 0;
+			background: var(--fg-color); color: var(--text-color); border: 1px solid var(--border-color);
+			border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); font-size: 13px;
+		}
+		.cf-filtro-titulo { padding: 0 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+		.cf-filtro-lista { max-height: 280px; overflow-y: auto; border-top: 1px solid var(--border-color); }
+		.cf-filtro-op { display: flex; align-items: center; gap: 8px; padding: 4px 12px; margin: 0; cursor: pointer; font-weight: normal; }
+		.cf-filtro-op:hover { background: var(--control-bg); }
+		.cf-filtro-op input { margin: 0; }
+		.cf-filtro-n { margin-left: auto; color: var(--text-muted); font-size: 11px; }
+		.cf-filtro-rodape { padding: 8px 12px 0; border-top: 1px solid var(--border-color); text-align: right; }
 		.cf-contagem { font-size: 12px; }
 
 		.cf-grelha-wrap {

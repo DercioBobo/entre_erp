@@ -25,6 +25,8 @@ ESTADO_CANCELADO = "Cancelado"
 # Lines that stay on the sheet but don't count for this month, except for
 # anything already paid on them.
 ESTADOS_FORA_DO_MES = (ESTADO_PROXIMO_MES, ESTADO_CANCELADO)
+# A line is settled ("liquidada") once it needs nothing more this month.
+ESTADOS_LIQUIDADOS = (ESTADO_PAGO, ESTADO_CANCELADO, ESTADO_PROXIMO_MES)
 
 
 def numero_mes(mes):
@@ -66,7 +68,39 @@ def criar_plano_do_mes():
 
 	plano.adicionar_despesas_recorrentes()
 	plano.adicionar_linhas_proximo_mes()
+	# Created even while last month is still open — it just stays locked
+	# for editing until last month is settled.
+	plano.flags.ignorar_bloqueio = True
 	plano.save(ignore_permissions=True)
+
+
+def bloqueio_do_mes_anterior(ano, mes):
+	"""A month is locked while the month before it is not Fechado and still
+	has lines to settle (pay, cancel or move to Próximo Mês)."""
+	ano_ant, mes_ant = mes_anterior(ano, mes)
+	nome = nome_plano("Mensal", ano_ant, mes_ant)
+	anterior = frappe.db.get_value("Plano de Pagamentos", nome, ["estado", "titulo"], as_dict=True)
+	if not anterior or anterior.estado == "Fechado":
+		return None
+
+	pendentes, valor = frappe.db.sql(
+		"""
+		select count(*), coalesce(sum(greatest(valor - valor_pago, 0)), 0)
+		from `tabLinha do Plano de Pagamentos`
+		where parent = %s and parenttype = 'Plano de Pagamentos' and estado not in %s
+		""",
+		(nome, ESTADOS_LIQUIDADOS),
+	)[0]
+	if not pendentes:
+		return None
+	return {
+		"plano": nome,
+		"titulo": anterior.titulo,
+		"ano": ano_ant,
+		"mes": mes_ant,
+		"pendentes": pendentes,
+		"valor": flt(valor),
+	}
 
 
 def valor_pago_da_linha(row):
@@ -114,7 +148,10 @@ def obter_ano(ano):
 def obter_plano(plano):
 	doc = frappe.get_doc("Plano de Pagamentos", plano)
 	doc.check_permission("read")
-	return doc.as_dict()
+	resultado = doc.as_dict()
+	if doc.tipo == "Mensal" and doc.estado != "Fechado":
+		resultado["bloqueio"] = bloqueio_do_mes_anterior(doc.ano, doc.mes)
+	return resultado
 
 
 @frappe.whitelist()
@@ -263,4 +300,5 @@ def _cabecalho(doc):
 		"total_pago": doc.total_pago,
 		"total_remanescente": doc.total_remanescente,
 		"resumo_metodos": [r.as_dict() for r in doc.resumo_metodos],
+		"fechado_automaticamente": bool(doc.flags.fechado_automaticamente),
 	}

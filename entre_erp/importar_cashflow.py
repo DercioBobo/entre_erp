@@ -16,7 +16,7 @@ import frappe
 from frappe.utils import getdate
 
 from entre_erp.install import create_categorias_de_despesa
-from entre_erp.pagamentos import MESES, nome_plano, numero_mes
+from entre_erp.pagamentos import ESTADOS_LIQUIDADOS, MESES, nome_plano, numero_mes
 
 METODOS_DE_PAGAMENTO = ["STB", "BIM", "BIM C"]
 
@@ -113,6 +113,7 @@ def importar(caminho, ano=2026, substituir=False, planos=None):
 		# moving Próximo Mês lines here would create that month too early
 		# (and the import would then skip it as "já existe").
 		doc.flags.sem_transporte = True
+		doc.flags.ignorar_bloqueio = True
 		doc.insert(ignore_permissions=True)
 		resultado.append(
 			f"{doc.name}: {len(doc.linhas)} linhas · previsto {doc.total_previsto:,.2f}"
@@ -306,7 +307,10 @@ def _estado_do_plano(plano, ano):
 	atual = (hoje.year, hoje.month)
 	periodo = (ano, numero_mes(plano["mes"]))
 	if periodo < atual:
-		return "Fechado"
+		# Only settled months can be Fechado; a past month with lines still
+		# to settle stays open (and keeps the next month locked).
+		liquidado = all(l["estado"] in ESTADOS_LIQUIDADOS for l in plano["linhas"])
+		return "Fechado" if liquidado else "Em Curso"
 	return "Em Curso" if periodo == atual else "Rascunho"
 
 
