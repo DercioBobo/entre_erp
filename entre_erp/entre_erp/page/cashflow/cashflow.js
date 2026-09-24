@@ -319,16 +319,17 @@ class CashflowSheet {
 					<div class="cf-barra"><div style="width:${pct}%"></div></div>
 				</div>
 			</div>
-			<table class="cf-metodos">
-				<thead><tr><th>${__("Método")}</th><th class="cf-num">${__("Pendente")}</th><th class="cf-num">${__("Pago")}</th></tr></thead>
-				<tbody>${(p.resumo_metodos || [])
-					.map(
-						(m) => `<tr><td>${esc(m.metodo_pagamento)}</td>
-							<td class="cf-num ${m.pendente > 0 ? "cf-laranja" : ""}">${dinheiro(m.pendente)}</td>
-							<td class="cf-num">${dinheiro(m.pago)}</td></tr>`,
-					)
-					.join("")}</tbody>
-			</table>
+			<div class="cf-metodos">${(p.resumo_metodos || [])
+				.filter((m) => m.pendente || m.pago)
+				.map(
+					(m) => `<span class="cf-metodo">
+						<b>${esc(m.metodo_pagamento)}</b>
+						<span class="${m.pendente > 0 ? "cf-laranja" : "text-muted"}">${__("Por pagar")} ${dinheiro(m.pendente)}</span>
+						<span class="text-muted">·</span>
+						<span>${__("Pago")} ${dinheiro(m.pago)}</span>
+					</span>`,
+				)
+				.join("")}</div>
 		`);
 		this.$conteudo.find(".cf-total-valor").text(dinheiro(p.total_previsto));
 		this.$conteudo.find(".cf-total-pago").text(dinheiro(p.total_pago));
@@ -904,22 +905,24 @@ function inject_styles() {
 			background: var(--bg-light-gray, var(--bg-color)); color: var(--text-muted); font-size: 13px;
 		}
 
-		.cf-cabecalho { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; align-items: stretch; }
-		.cf-kpis { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; }
+		/* KPI cards on one row, payment methods as a slim strip of chips under it. */
+		.cf-cabecalho { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+		.cf-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 		.cf-kpi {
-			flex: 1; min-width: 150px; padding: 12px 14px; border-radius: 8px;
+			padding: 8px 12px; border-radius: 8px;
 			background: var(--fg-color); border: 1px solid var(--cf-linha);
 		}
-		.cf-kpi-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-		.cf-kpi-valor { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-		.cf-barra { height: 8px; border-radius: 4px; background: var(--cf-linha); margin-top: 10px; overflow: hidden; }
+		.cf-kpi-label { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+		.cf-kpi-valor { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.3; }
+		.cf-barra { height: 6px; border-radius: 3px; background: var(--cf-linha); margin-top: 10px; overflow: hidden; }
 		.cf-barra > div { height: 100%; background: var(--cf-verde); }
-		.cf-metodos {
-			font-size: 12px; border: 1px solid var(--cf-linha); border-radius: 8px;
-			background: var(--fg-color); border-collapse: separate; min-width: 260px;
+		.cf-metodos { display: flex; flex-wrap: wrap; gap: 6px; }
+		.cf-metodos:empty { display: none; }
+		.cf-metodo {
+			display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+			font-size: 12px; border-radius: 12px; font-variant-numeric: tabular-nums;
+			background: var(--fg-color); border: 1px solid var(--cf-linha);
 		}
-		.cf-metodos th, .cf-metodos td { padding: 4px 10px; }
-		.cf-metodos th { color: var(--text-muted); font-weight: 500; }
 
 		.cf-filtros { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 		.cf-filtros .cf-pesquisa { max-width: 260px; }
@@ -1020,6 +1023,7 @@ function inject_styles() {
 		.cf-ponto-pendente { background: var(--cf-laranja); }
 
 		@media (max-width: 768px) {
+			.cf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 			.cf-kpi-valor { font-size: 16px; }
 			.cf-grelha-wrap { max-height: none; }
 		}
