@@ -1,0 +1,145 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "descricao",
+  "valor",
+  "prioridade",
+  "estado",
+  "valor_pago",
+  "metodo_pagamento",
+  "data_vencimento",
+  "column_break_1",
+  "categoria",
+  "despesa_recorrente",
+  "fornecedor",
+  "factura",
+  "ordem_compra",
+  "section_break_obs",
+  "observacoes",
+  "linha_origem"
+ ],
+ "fields": [
+  {
+   "fieldname": "descricao",
+   "fieldtype": "Data",
+   "label": "Descrição",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "valor",
+   "fieldtype": "Currency",
+   "label": "Valor",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "prioridade",
+   "fieldtype": "Select",
+   "label": "Prioridade",
+   "options": "\n1\n2\n3\n4",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "estado",
+   "fieldtype": "Select",
+   "label": "Estado",
+   "options": "Pendente\nReservado\nEm Progresso\nParcialmente Pago\nPago\nEm Espera\nPróximo Mês",
+   "default": "Pendente",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "valor_pago",
+   "fieldtype": "Currency",
+   "label": "Valor Pago",
+   "in_list_view": 1,
+   "columns": 1,
+   "description": "Preenchido automaticamente com o Valor quando o Estado passa a Pago."
+  },
+  {
+   "fieldname": "metodo_pagamento",
+   "fieldtype": "Link",
+   "label": "Método de Pagamento",
+   "options": "Mode of Payment",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "data_vencimento",
+   "fieldtype": "Date",
+   "label": "Data de Vencimento",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "categoria",
+   "fieldtype": "Link",
+   "label": "Categoria",
+   "options": "Categoria de Despesa"
+  },
+  {
+   "fieldname": "despesa_recorrente",
+   "fieldtype": "Link",
+   "label": "Despesa Recorrente",
+   "options": "Despesa Recorrente"
+  },
+  {
+   "fieldname": "fornecedor",
+   "fieldtype": "Link",
+   "label": "Fornecedor",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "factura",
+   "fieldtype": "Data",
+   "label": "Factura",
+   "description": "Ex.: FT-FORN/26/010"
+  },
+  {
+   "fieldname": "ordem_compra",
+   "fieldtype": "Data",
+   "label": "Ordem de Compra",
+   "description": "Ex.: PUR-ORD-2026-00017"
+  },
+  {
+   "fieldname": "section_break_obs",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "observacoes",
+   "fieldtype": "Small Text",
+   "label": "Observações"
+  },
+  {
+   "fieldname": "linha_origem",
+   "fieldtype": "Data",
+   "label": "Linha de Origem",
+   "hidden": 1,
+   "no_copy": 1,
+   "read_only": 1,
+   "description": "Linha do mês anterior de onde esta foi transportada (Próximo Mês)."
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Linha do Plano de Pagamentos",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1,
+ "editable_grid": 1
+}

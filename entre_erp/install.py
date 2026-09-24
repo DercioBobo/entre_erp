@@ -4,6 +4,7 @@ import frappe
 def after_install():
     create_tech_lead_role()
     create_tech_role()
+    create_categorias_de_despesa()
 
 
 def create_tech_lead_role():
@@ -16,6 +17,32 @@ def create_tech_role():
     """Tech gates who can appear in a Deployment Plan's Implemented By,
     Standby and People Involved fields."""
     _create_role_if_missing("Tech")
+
+
+CATEGORIAS_DE_DESPESA = [
+    "Impostos",
+    "Salários e Encargos",
+    "Cloud e TI",
+    "Instalações",
+    "Transporte e Combustível",
+    "Escritório e Equipamento",
+    "Pessoal e Eventos",
+    "Serviços",
+    "Reembolsos",
+    "Investimento",
+    "Outros",
+]
+
+
+def create_categorias_de_despesa():
+    """Default categories for Despesa Recorrente / Plano de Pagamentos.
+    Safe to call again (`bench --site your-site.com execute
+    entre_erp.install.create_categorias_de_despesa`)."""
+    for categoria in CATEGORIAS_DE_DESPESA:
+        if not frappe.db.exists("Categoria de Despesa", categoria):
+            frappe.get_doc({"doctype": "Categoria de Despesa", "categoria": categoria}).insert(
+                ignore_permissions=True
+            )
 
 
 def _create_role_if_missing(role_name):

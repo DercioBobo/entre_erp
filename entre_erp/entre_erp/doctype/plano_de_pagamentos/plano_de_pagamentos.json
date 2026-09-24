@@ -1,0 +1,173 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "titulo",
+  "tipo",
+  "ano",
+  "mes",
+  "column_break_1",
+  "estado",
+  "section_break_linhas",
+  "linhas",
+  "section_break_totais",
+  "total_previsto",
+  "total_pago",
+  "total_remanescente",
+  "column_break_2",
+  "resumo_metodos"
+ ],
+ "fields": [
+  {
+   "fieldname": "titulo",
+   "fieldtype": "Data",
+   "label": "Título",
+   "read_only": 1,
+   "in_list_view": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "tipo",
+   "fieldtype": "Select",
+   "label": "Tipo",
+   "options": "Mensal\nInvestimentos",
+   "default": "Mensal",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "ano",
+   "fieldtype": "Int",
+   "label": "Ano",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "mes",
+   "fieldtype": "Select",
+   "label": "Mês",
+   "options": "\nJaneiro\nFevereiro\nMarço\nAbril\nMaio\nJunho\nJulho\nAgosto\nSetembro\nOutubro\nNovembro\nDezembro",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "depends_on": "eval:doc.tipo=='Mensal'",
+   "mandatory_depends_on": "eval:doc.tipo=='Mensal'"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "estado",
+   "fieldtype": "Select",
+   "label": "Estado do Plano",
+   "options": "Rascunho\nEm Curso\nFechado",
+   "default": "Rascunho",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_break_linhas",
+   "fieldtype": "Section Break",
+   "label": "Pagamentos"
+  },
+  {
+   "fieldname": "linhas",
+   "fieldtype": "Table",
+   "label": "Pagamentos",
+   "options": "Linha do Plano de Pagamentos"
+  },
+  {
+   "fieldname": "section_break_totais",
+   "fieldtype": "Section Break",
+   "label": "Totais"
+  },
+  {
+   "fieldname": "total_previsto",
+   "fieldtype": "Currency",
+   "label": "Total Previsto",
+   "read_only": 1,
+   "in_list_view": 1,
+   "no_copy": 1,
+   "description": "Não inclui linhas em Próximo Mês."
+  },
+  {
+   "fieldname": "total_pago",
+   "fieldtype": "Currency",
+   "label": "Total Pago",
+   "read_only": 1,
+   "in_list_view": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "total_remanescente",
+   "fieldtype": "Currency",
+   "label": "Total Remanescente",
+   "read_only": 1,
+   "in_list_view": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "resumo_metodos",
+   "fieldtype": "Table",
+   "label": "Resumo por Método de Pagamento",
+   "options": "Resumo por Metodo de Pagamento",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Plano de Pagamentos",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "System Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "titulo",
+ "show_title_field_in_link": 1,
+ "track_changes": 1
+}

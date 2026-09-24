@@ -1,0 +1,44 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "metodo_pagamento",
+  "pendente",
+  "pago"
+ ],
+ "fields": [
+  {
+   "fieldname": "metodo_pagamento",
+   "fieldtype": "Data",
+   "label": "Método de Pagamento",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "pendente",
+   "fieldtype": "Currency",
+   "label": "Pendente",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "pago",
+   "fieldtype": "Currency",
+   "label": "Pago",
+   "in_list_view": 1,
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Resumo por Metodo de Pagamento",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1
+}

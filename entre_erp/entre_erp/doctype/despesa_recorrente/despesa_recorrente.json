@@ -1,0 +1,150 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "despesa",
+  "categoria",
+  "fornecedor",
+  "ativo",
+  "column_break_1",
+  "valor_padrao",
+  "tipo_valor",
+  "prioridade",
+  "metodo_pagamento",
+  "dia_vencimento",
+  "section_break_ref",
+  "referencia"
+ ],
+ "fields": [
+  {
+   "fieldname": "despesa",
+   "fieldtype": "Data",
+   "label": "Despesa",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "categoria",
+   "fieldtype": "Link",
+   "label": "Categoria",
+   "options": "Categoria de Despesa",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "fornecedor",
+   "fieldtype": "Link",
+   "label": "Fornecedor",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "ativo",
+   "fieldtype": "Check",
+   "label": "Ativo",
+   "default": "1",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "valor_padrao",
+   "fieldtype": "Currency",
+   "label": "Valor Padrão",
+   "in_list_view": 1,
+   "description": "Valor sugerido ao copiar para o plano do mês."
+  },
+  {
+   "fieldname": "tipo_valor",
+   "fieldtype": "Select",
+   "label": "Tipo de Valor",
+   "options": "Fixo\nVariável",
+   "default": "Fixo",
+   "description": "Variável: o valor muda todos os meses (ex.: IVA, AWS) e deve ser confirmado no plano."
+  },
+  {
+   "fieldname": "prioridade",
+   "fieldtype": "Select",
+   "label": "Prioridade",
+   "options": "\n1\n2\n3\n4"
+  },
+  {
+   "fieldname": "metodo_pagamento",
+   "fieldtype": "Link",
+   "label": "Método de Pagamento",
+   "options": "Mode of Payment",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "dia_vencimento",
+   "fieldtype": "Int",
+   "label": "Dia de Vencimento",
+   "description": "Dia do mês (1–31). Opcional."
+  },
+  {
+   "fieldname": "section_break_ref",
+   "fieldtype": "Section Break",
+   "label": "Referências"
+  },
+  {
+   "fieldname": "referencia",
+   "fieldtype": "Small Text",
+   "label": "Referência / NIB / Nr de Contador",
+   "description": "Copiado para as Observações de cada linha do plano."
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Despesa Recorrente",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "System Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "field:despesa",
+ "naming_rule": "By fieldname",
+ "track_changes": 1
+}
