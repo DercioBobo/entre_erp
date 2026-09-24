@@ -6,8 +6,9 @@ from frappe.utils import flt
 from entre_erp.pagamentos import (
 	ESTADO_PAGO,
 	ESTADO_PROXIMO_MES,
-	data_vencimento,
+	ESTADOS_FORA_DO_MES,
 	mes_anterior,
+	mes_seguinte,
 	nome_plano,
 	valor_pago_da_linha,
 )
@@ -23,6 +24,9 @@ class PlanodePagamentos(Document):
 		self.titulo = f"{self.mes} {self.ano}" if self.tipo == "Mensal" else f"Investimentos {self.ano}"
 		self._preencher_linhas()
 		self._calcular_totais()
+
+	def on_update(self):
+		self._sincronizar_proximo_mes()
 
 	# ------------------------------------------------------------------
 	# Buttons (plano_de_pagamentos.js)
@@ -57,7 +61,6 @@ class PlanodePagamentos(Document):
 				"valor_padrao",
 				"prioridade",
 				"metodo_pagamento",
-				"dia_vencimento",
 				"referencia",
 			],
 			order_by="prioridade asc, despesa asc",
@@ -77,9 +80,6 @@ class PlanodePagamentos(Document):
 					"valor": d.valor_padrao,
 					"prioridade": d.prioridade,
 					"metodo_pagamento": d.metodo_pagamento,
-					"data_vencimento": data_vencimento(self.ano, self.mes, d.dia_vencimento)
-					if self.tipo == "Mensal"
-					else None,
 					"observacoes": d.referencia,
 					"estado": "Pendente",
 				},
@@ -103,29 +103,94 @@ class PlanodePagamentos(Document):
 		for row in frappe.get_doc("Plano de Pagamentos", anterior).linhas:
 			if row.estado != ESTADO_PROXIMO_MES or row.name in ja_transportadas:
 				continue
-			self.append(
-				"linhas",
-				{
-					"descricao": row.descricao,
-					"valor": flt(row.valor) - flt(row.valor_pago),
-					"prioridade": row.prioridade,
-					"estado": "Pendente",
-					"metodo_pagamento": row.metodo_pagamento,
-					"categoria": row.categoria,
-					"despesa_recorrente": row.despesa_recorrente,
-					"fornecedor": row.fornecedor,
-					"factura": row.factura,
-					"ordem_compra": row.ordem_compra,
-					"observacoes": row.observacoes,
-					"linha_origem": row.name,
-				},
-			)
+			self.append("linhas", {**_dados_da_copia(row), "estado": "Pendente", "linha_origem": row.name})
 			adicionadas += 1
 		return adicionadas
 
 	# ------------------------------------------------------------------
 	# Private
 	# ------------------------------------------------------------------
+
+	def _sincronizar_proximo_mes(self):
+		"""A line set to Próximo Mês moves (what is left unpaid) to next
+		month's plan, creating that plan if needed. While the copy is
+		untouched there (Pendente, nothing paid) it follows edits made here;
+		undoing Próximo Mês takes it back out. What happened is left in
+		`flags.transporte` for the Cashflow page."""
+		self.flags.transporte = None
+		if self.tipo != "Mensal" or self.flags.sem_transporte:
+			return
+
+		marcadas = {r.name: r for r in self.linhas if r.estado == ESTADO_PROXIMO_MES}
+		antes = self.get_doc_before_save()
+		desmarcadas = {
+			r.name for r in (antes.linhas if antes else []) if r.estado == ESTADO_PROXIMO_MES
+		} - set(marcadas)
+		if not marcadas and not desmarcadas:
+			return
+
+		ano, mes = mes_seguinte(self.ano, self.mes)
+		nome = nome_plano("Mensal", ano, mes)
+		existe = bool(frappe.db.exists("Plano de Pagamentos", nome))
+		if not existe and not marcadas:
+			return
+
+		if existe:
+			destino = frappe.get_doc("Plano de Pagamentos", nome)
+		else:
+			destino = frappe.get_doc({"doctype": "Plano de Pagamentos", "tipo": "Mensal", "ano": ano, "mes": mes})
+			destino.adicionar_despesas_recorrentes()
+
+		copias = {r.linha_origem: r for r in destino.linhas if r.linha_origem}
+		titulo_destino = f"{mes} {ano}"
+
+		removidas = 0
+		for origem in desmarcadas:
+			copia = copias.get(origem)
+			if not copia:
+				continue
+			if copia.estado != "Pendente" or flt(copia.valor_pago):
+				frappe.throw(
+					_("{0} já foi mexida em {1} ({2}). Trate-a lá antes de a tirar de Próximo Mês.").format(
+						frappe.bold(copia.descricao), titulo_destino, copia.estado
+					)
+				)
+			destino.remove(copia)
+			removidas += 1
+
+		alteradas = 0
+		for origem, row in marcadas.items():
+			copia = copias.get(origem)
+			if not copia or copia.estado != "Pendente" or flt(copia.valor_pago):
+				continue
+			for campo, valor in _dados_da_copia(row).items():
+				if (copia.get(campo) or None) != (valor or None):
+					copia.set(campo, valor)
+					alteradas += 1
+
+		adicionadas = destino.adicionar_linhas_proximo_mes()
+
+		if not (adicionadas or removidas or alteradas or not existe):
+			return
+		if destino.estado == "Fechado":
+			frappe.throw(
+				_("O plano de {0} está Fechado — reabra-o para mover linhas para lá.").format(titulo_destino)
+			)
+
+		if existe:
+			destino.save()
+		else:
+			destino.insert()
+
+		if adicionadas or removidas or not existe:
+			self.flags.transporte = {
+				"plano": destino.name,
+				"ano": ano,
+				"mes": mes,
+				"adicionadas": adicionadas,
+				"removidas": removidas,
+				"criado": not existe,
+			}
 
 	def _validar_periodo(self):
 		if not (2000 <= (self.ano or 0) <= 2100):
@@ -155,14 +220,15 @@ class PlanodePagamentos(Document):
 
 	def _calcular_totais(self):
 		"""Mirrors the spreadsheet: Previsto / Pago / Remanescente, plus the
-		pending-vs-paid split per bank. A Próximo Mês line only counts for
-		what was paid this month — the rest belongs to next month's plan."""
+		pending-vs-paid split per bank. A Próximo Mês or Cancelado line only
+		counts for what was paid this month — the rest belongs to next
+		month's plan, or isn't paid at all."""
 		previsto = pago = remanescente = 0.0
 		por_metodo = {}
 
 		for row in self.linhas:
 			valor, valor_pago = flt(row.valor), flt(row.valor_pago)
-			if row.estado == ESTADO_PROXIMO_MES:
+			if row.estado in ESTADOS_FORA_DO_MES:
 				previsto_linha, pendente = valor_pago, 0.0
 			else:
 				previsto_linha = valor
@@ -183,3 +249,19 @@ class PlanodePagamentos(Document):
 		self.set("resumo_metodos", [])
 		for metodo, (pendente, pago_metodo) in sorted(por_metodo.items()):
 			self.append("resumo_metodos", {"metodo_pagamento": metodo, "pendente": pendente, "pago": pago_metodo})
+
+
+def _dados_da_copia(row):
+	"""What a Próximo Mês line carries into next month: only the unpaid part."""
+	return {
+		"descricao": row.descricao,
+		"valor": flt(row.valor) - flt(row.valor_pago),
+		"prioridade": row.prioridade,
+		"metodo_pagamento": row.metodo_pagamento,
+		"categoria": row.categoria,
+		"despesa_recorrente": row.despesa_recorrente,
+		"fornecedor": row.fornecedor,
+		"factura": row.factura,
+		"ordem_compra": row.ordem_compra,
+		"observacoes": row.observacoes,
+	}

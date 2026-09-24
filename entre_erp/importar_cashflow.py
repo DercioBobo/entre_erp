@@ -28,6 +28,8 @@ ESTADOS = {
 	"em progresso": "Em Progresso",
 	"em espera": "Em Espera",
 	"proximo mes": "Próximo Mês",
+	"cancelado": "Cancelado",
+	"cancelar": "Cancelado",
 }
 
 # (name, categoria, valor_padrao, tipo_valor, prioridade, metodo, referencia, pattern)
@@ -106,7 +108,12 @@ def importar(caminho, ano=2026, substituir=False, planos=None):
 				"estado": _estado_do_plano(plano, ano),
 				"linhas": plano["linhas"],
 			}
-		).insert(ignore_permissions=True)
+		)
+		# The spreadsheet already has next month's lines in their own sheet;
+		# moving Próximo Mês lines here would create that month too early
+		# (and the import would then skip it as "já existe").
+		doc.flags.sem_transporte = True
+		doc.insert(ignore_permissions=True)
 		resultado.append(
 			f"{doc.name}: {len(doc.linhas)} linhas · previsto {doc.total_previsto:,.2f}"
 			f" · pago {doc.total_pago:,.2f} · remanescente {doc.total_remanescente:,.2f}"

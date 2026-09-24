@@ -13,7 +13,6 @@
   "tipo_valor",
   "prioridade",
   "metodo_pagamento",
-  "dia_vencimento",
   "section_break_ref",
   "referencia"
  ],
@@ -82,12 +81,6 @@
    "in_list_view": 1
   },
   {
-   "fieldname": "dia_vencimento",
-   "fieldtype": "Int",
-   "label": "Dia de Vencimento",
-   "description": "Dia do mês (1–31). Opcional."
-  },
-  {
    "fieldname": "section_break_ref",
    "fieldtype": "Section Break",
    "label": "Referências"
@@ -100,7 +93,7 @@
   }
  ],
  "links": [],
- "modified": "2026-09-24 00:00:00.000000",
+ "modified": "2026-09-25 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Despesa Recorrente",

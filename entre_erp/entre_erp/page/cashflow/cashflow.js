@@ -27,7 +27,9 @@ const MESES = [
 ];
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-const ESTADOS = ["Pendente", "Reservado", "Em Progresso", "Parcialmente Pago", "Pago", "Em Espera", "Próximo Mês"];
+const ESTADOS = ["Pendente", "Reservado", "Em Progresso", "Parcialmente Pago", "Pago", "Em Espera", "Próximo Mês", "Cancelado"];
+// Stay on the sheet but don't count as money to pay this month.
+const ESTADOS_FORA_DO_MES = ["Próximo Mês", "Cancelado"];
 const ESTADO_CLASS = {
 	Pendente: "pendente",
 	Reservado: "reservado",
@@ -36,6 +38,7 @@ const ESTADO_CLASS = {
 	Pago: "pago",
 	"Em Espera": "espera",
 	"Próximo Mês": "proximo",
+	Cancelado: "cancelado",
 };
 const ESTADOS_PLANO = ["Rascunho", "Em Curso", "Fechado"];
 
@@ -52,7 +55,6 @@ const COLUNAS_PLANO = [
 	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, opcoes: () => ESTADOS },
 	{ campo: "valor_pago", label: "Valor Pago", tipo: "num", largura: 120 },
 	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 100, opcoes: (s) => [""].concat(s.metodos) },
-	{ campo: "data_vencimento", label: "Vencimento", tipo: "date", largura: 140 },
 	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, opcoes: (s) => [""].concat(s.categorias) },
 	{ campo: "factura", label: "Factura", tipo: "text", largura: 150 },
 	{ campo: "observacoes", label: "Observações", tipo: "text", largura: 300 },
@@ -65,7 +67,6 @@ const COLUNAS_RECORRENTES = [
 	{ campo: "tipo_valor", label: "Tipo", tipo: "select", largura: 100, opcoes: () => ["Fixo", "Variável"] },
 	{ campo: "prioridade", label: "Prior.", tipo: "select", largura: 70, opcoes: () => ["", "1", "2", "3", "4"] },
 	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 100, opcoes: (s) => [""].concat(s.metodos) },
-	{ campo: "dia_vencimento", label: "Dia Venc.", tipo: "int", largura: 80 },
 	{ campo: "referencia", label: "Referência / NIB", tipo: "text", largura: 320 },
 	{ campo: "ativo", label: "Ativo", tipo: "check", largura: 60 },
 ];
@@ -77,6 +78,18 @@ function nome_plano(ano, aba) {
 	if (aba === ABA_INVESTIMENTOS) return `PI-${ano}`;
 	return `PP-${ano}-${String(MESES.indexOf(aba) + 1).padStart(2, "0")}`;
 }
+
+function mes_seguinte(ano, mes) {
+	const i = MESES.indexOf(mes);
+	return i === 11 ? [ano + 1, MESES[0]] : [ano, MESES[i + 1]];
+}
+
+function mes_anterior(ano, mes) {
+	const i = MESES.indexOf(mes);
+	return i === 0 ? [ano - 1, MESES[11]] : [ano, MESES[i - 1]];
+}
+
+const curto = (mes) => MESES_CURTOS[MESES.indexOf(mes)];
 
 class CashflowSheet {
 	constructor(page) {
@@ -146,14 +159,17 @@ class CashflowSheet {
 			return `<span class="cf-ponto ${p.total_remanescente > 0 ? "cf-ponto-pendente" : "cf-ponto-ok"}"></span>`;
 		};
 		const aba = (id, label, extra = "") =>
-			`<button class="cf-aba ${extra}" data-aba="${esc(id)}">${label}</button>`;
+			`<button class="cf-aba ${extra} ${id === this.aba ? "active" : ""}" data-aba="${esc(id)}">${label}</button>`;
 
-		this.$body.find(".cf-abas").html(
+		const $abas = this.$body.find(".cf-abas");
+		$abas.html(
 			aba(ABA_RESUMO, __("Resumo Anual"), "cf-aba-especial") +
 				MESES.map((m, i) => aba(m, ponto(m) + MESES_CURTOS[i])).join("") +
 				aba(ABA_INVESTIMENTOS, ponto(ABA_INVESTIMENTOS) + __("Investimentos"), "cf-aba-especial") +
 				aba(ABA_RECORRENTES, __("Recorrentes"), "cf-aba-especial"),
 		);
+		const ativa = $abas.find(".cf-aba.active")[0];
+		if (ativa) ativa.scrollIntoView({ inline: "nearest", block: "nearest" });
 	}
 
 	abrir_aba(aba) {
@@ -244,7 +260,7 @@ class CashflowSheet {
 					<thead><tr>
 						<th class="cf-idx">#</th>
 						${COLUNAS_PLANO.map((c) => `<th class="${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}</th>`).join("")}
-						<th></th>
+						<th style="min-width:110px"></th>
 					</tr></thead>
 					<tbody>${doc.linhas.map((row, i) => this.html_linha(row, i + 1, fechado)).join("")}</tbody>
 					<tfoot>
@@ -265,15 +281,30 @@ class CashflowSheet {
 
 		this.render_cabecalho(doc);
 		this.bind_plano();
+		this.destacar_linha();
 	}
 
 	html_linha(row, idx, fechado) {
 		return `
-			<tr data-name="${esc(row.name)}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"}">
+			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"}">
 				<td class="cf-idx">${idx}</td>
 				${COLUNAS_PLANO.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, fechado)}</td>`).join("")}
-				<td class="cf-acoes">${fechado ? "" : `<button class="btn btn-xs btn-link cf-remover" title="${__("Remover linha")}">×</button>`}</td>
+				<td class="cf-acoes">${this.html_acoes(row, fechado)}</td>
 			</tr>`;
+	}
+
+	html_acoes(row, fechado) {
+		let html = "";
+		if (this.doc.tipo === "Mensal" && row.estado === "Próximo Mês") {
+			const [, mes] = mes_seguinte(this.doc.ano, this.doc.mes);
+			html += `<button class="cf-salto" data-ir="seguinte" title="${__("Ver esta linha em {0}", [mes])}">→ ${curto(mes)}</button>`;
+		}
+		if (row.linha_origem) {
+			const [, mes] = mes_anterior(this.doc.ano, this.doc.mes);
+			html += `<button class="cf-salto" data-ir="anterior" title="${__("Veio de {0} (Próximo Mês)", [mes])}">← ${curto(mes)}</button>`;
+		}
+		if (!fechado) html += `<button class="btn btn-xs btn-link cf-remover" title="${__("Remover linha")}">×</button>`;
+		return html;
 	}
 
 	render_cabecalho(p) {
@@ -308,9 +339,7 @@ class CashflowSheet {
 			resumo.total_remanescente = p.total_remanescente;
 			resumo.estado = p.estado;
 			this.render_abas();
-			this.$body.find(`.cf-aba[data-aba="${this.aba}"]`).addClass("active");
 		}
-		this.marcar_atrasados();
 	}
 
 	bind_plano() {
@@ -334,6 +363,7 @@ class CashflowSheet {
 					.then((r) => {
 						this.atualizar_linha_na_grelha($tr, r.linha);
 						this.render_cabecalho(r.plano);
+						if (r.transporte) this.anunciar_transporte(r.transporte, r.linha.name);
 					}),
 			);
 		});
@@ -372,9 +402,23 @@ class CashflowSheet {
 				this.guardar(() =>
 					frappe
 						.xcall(API + "remover_linha", { plano: this.doc.name, linha: $tr.attr("data-name") })
-						.then((doc) => this.render_plano(doc)),
+						.then((r) => {
+							this.render_plano(r.plano);
+							if (r.transporte) this.anunciar_transporte(r.transporte);
+						}),
 				),
 			);
+		});
+
+		$c.on("click", ".cf-salto", (e) => {
+			const $tr = $(e.currentTarget).closest("tr");
+			if ($(e.currentTarget).attr("data-ir") === "seguinte") {
+				const [ano, mes] = mes_seguinte(this.doc.ano, this.doc.mes);
+				this.ir_para(ano, mes, `tr[data-origem="${$tr.attr("data-name")}"]`);
+			} else {
+				const [ano, mes] = mes_anterior(this.doc.ano, this.doc.mes);
+				this.ir_para(ano, mes, `tr[data-name="${$tr.attr("data-origem")}"]`);
+			}
 		});
 
 		$c.on("input change", ".cf-pesquisa, .cf-filtro-estado", () => this.aplicar_filtros());
@@ -409,6 +453,7 @@ class CashflowSheet {
 
 	atualizar_linha_na_grelha($tr, linha) {
 		$tr.attr("class", `cf-estado-${ESTADO_CLASS[linha.estado] || "pendente"}`);
+		$tr.find(".cf-acoes").html(this.html_acoes(linha, false));
 		$tr.find(".cf-cell").each((_i, el) => {
 			if (el === document.activeElement) return;
 			const coluna = COLUNAS_PLANO.find((c) => c.campo === el.getAttribute("data-campo"));
@@ -416,14 +461,54 @@ class CashflowSheet {
 		});
 	}
 
-	marcar_atrasados() {
-		const hoje = frappe.datetime.get_today();
-		this.$conteudo.find("tbody tr").each((_i, tr) => {
-			const $tr = $(tr);
-			const venc = $tr.find('[data-campo="data_vencimento"]').val();
-			const estado = $tr.find('[data-campo="estado"]').val();
-			const atrasado = venc && venc < hoje && !["Pago", "Próximo Mês"].includes(estado);
-			$tr.find('[data-campo="data_vencimento"]').toggleClass("cf-atrasado", !!atrasado);
+	// Opens another month (another year if needed) and flashes the row
+	// matching `seletor` once the sheet is drawn.
+	ir_para(ano, mes, seletor) {
+		this.destacar = seletor;
+		this.aba = mes;
+		if (ano !== this.ano) {
+			this.ano = ano;
+			this.carregar_ano();
+		} else {
+			this.render_abas();
+			this.abrir_aba(mes);
+		}
+	}
+
+	destacar_linha() {
+		if (!this.destacar) return;
+		const $tr = this.$conteudo.find(this.destacar);
+		this.destacar = null;
+		if (!$tr.length) return;
+		$tr[0].scrollIntoView({ block: "center", behavior: "smooth" });
+		$tr.addClass("cf-destaque");
+		setTimeout(() => $tr.removeClass("cf-destaque"), 2600);
+	}
+
+	anunciar_transporte(t, linha) {
+		const destino = `${t.mes} ${t.ano}`;
+		const msg = t.adicionadas
+			? t.criado
+				? __("Movido para {0} — plano de {0} criado.", [destino])
+				: __("Movido para {0}.", [destino])
+			: __("Retirado de {0}.", [destino]);
+
+		const $alerta = frappe.show_alert(
+			{
+				message: t.adicionadas ? `${msg} <a class="cf-alerta-link">${__("Abrir {0}", [t.mes])} →</a>` : msg,
+				indicator: t.adicionadas ? "blue" : "gray",
+			},
+			7,
+		);
+		$alerta &&
+			$alerta.find(".cf-alerta-link").on("click", () =>
+				this.ir_para(t.ano, t.mes, linha ? `tr[data-origem="${linha}"]` : null),
+			);
+
+		// The next month may have just been created: refresh the tab dots.
+		frappe.xcall(API + "obter_ano", { ano: this.ano }).then((d) => {
+			d.planos.forEach((p) => (this.planos[p.name] = p));
+			this.render_abas();
 		});
 	}
 
@@ -444,7 +529,9 @@ class CashflowSheet {
 				.toLowerCase();
 			const ok_estado =
 				!filtro ||
-				(filtro === "__por_pagar" ? !["Pago", "Próximo Mês"].includes(estado) : estado === filtro);
+				(filtro === "__por_pagar"
+					? estado !== "Pago" && !ESTADOS_FORA_DO_MES.includes(estado)
+					: estado === filtro);
 			const mostrar = ok_estado && (!txt || texto.includes(txt));
 			$tr.toggle(mostrar);
 			if (mostrar) visiveis++;
@@ -790,7 +877,7 @@ function inject_styles() {
 			--cf-laranja: #d97706;
 			--cf-vermelho: #dc2626;
 			--cf-linha: var(--border-color);
-			padding-bottom: 8px;
+			padding-bottom: 56px; /* room for the frozen tab bar */
 		}
 		html[data-theme="dark"] .cf-sheet {
 			--cf-verde: #4ade80;
@@ -840,7 +927,7 @@ function inject_styles() {
 		.cf-contagem { font-size: 12px; }
 
 		.cf-grelha-wrap {
-			overflow: auto; max-height: calc(100vh - 330px); min-height: 200px;
+			overflow: auto; max-height: calc(100vh - 360px); min-height: 200px;
 			border: 1px solid var(--cf-linha); border-radius: 8px; background: var(--fg-color);
 		}
 		.cf-grelha { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
@@ -869,7 +956,6 @@ function inject_styles() {
 		.cf-cell:focus { box-shadow: inset 0 0 0 2px var(--primary); background: var(--control-bg); }
 		.cf-cell:disabled { opacity: 1; cursor: default; }
 		.cf-cell.cf-check { width: auto; height: auto; margin: 8px auto; display: block; }
-		.cf-cell.cf-atrasado { color: var(--cf-vermelho); font-weight: 600; }
 
 		/* Row tint by Estado — the left bar is the main cue, readable in both themes. */
 		.cf-grelha tbody tr > td:first-child { box-shadow: inset 3px 0 0 transparent; }
@@ -882,6 +968,10 @@ function inject_styles() {
 		.cf-estado-pendente > td:first-child { box-shadow: inset 3px 0 0 var(--cf-vermelho) !important; }
 		.cf-estado-proximo td, .cf-estado-espera td, .cf-inativo td { color: var(--text-muted); }
 		.cf-estado-proximo .cf-cell, .cf-estado-espera .cf-cell, .cf-inativo .cf-cell { color: var(--text-muted); }
+
+		.cf-estado-cancelado .cf-cell { color: var(--text-muted); }
+		.cf-estado-cancelado input.cf-cell { text-decoration: line-through; }
+		.cf-estado-cancelado [data-campo="estado"] { text-decoration: none; font-style: italic; }
 
 		.cf-nova td { background: var(--fg-color); }
 		.cf-nova-input { font-style: italic; }
@@ -898,11 +988,17 @@ function inject_styles() {
 		.cf-mes-link:hover { color: var(--primary) !important; text-decoration: underline; }
 		.cf-grafico { margin-bottom: 12px; background: var(--fg-color); border: 1px solid var(--cf-linha); border-radius: 8px; }
 
-		/* Excel-style sheet tabs */
+		/* Excel-style sheet tabs, frozen to the bottom of the window.
+		   Frappe hides the whole page on route change, so this goes with it. */
 		.cf-abas {
-			display: flex; gap: 2px; margin-top: 10px; overflow-x: auto;
-			border-top: 1px solid var(--cf-linha); padding-top: 6px;
+			position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+			display: flex; gap: 2px; overflow-x: auto; padding: 0 16px 6px;
+			background: var(--bg-color); border-top: 1px solid var(--cf-linha);
+			box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 		}
+		/* Gaps between the groups: Resumo | Jan…Dez | Investimentos, Recorrentes */
+		.cf-aba-especial + .cf-aba:not(.cf-aba-especial),
+		.cf-aba:not(.cf-aba-especial) + .cf-aba-especial { margin-left: 12px; }
 		.cf-aba {
 			border: 1px solid var(--cf-linha); background: var(--fg-color); color: var(--text-muted);
 			border-radius: 0 0 6px 6px; border-top: 0; padding: 6px 14px; font-size: 13px;
@@ -911,6 +1007,14 @@ function inject_styles() {
 		.cf-aba:hover { color: var(--text-color); }
 		.cf-aba.active { color: var(--primary); font-weight: 600; box-shadow: inset 0 3px 0 var(--primary); }
 		.cf-aba-especial { font-weight: 500; }
+		.cf-salto {
+			font-size: 11px; padding: 1px 7px; margin-left: 4px; border-radius: 10px; white-space: nowrap;
+			border: 1px solid var(--cf-linha); background: var(--control-bg); color: var(--text-muted);
+		}
+		.cf-salto:hover { color: var(--primary); border-color: var(--primary); }
+		.cf-grelha .cf-acoes { width: auto; white-space: nowrap; padding: 0 4px; }
+		@keyframes cf-flash { from { background: rgba(59, 130, 246, 0.35); } to { background: var(--fg-color); } }
+		.cf-destaque > td { animation: cf-flash 2.6s ease-out; }
 		.cf-ponto { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 		.cf-ponto-ok { background: var(--cf-verde); }
 		.cf-ponto-pendente { background: var(--cf-laranja); }

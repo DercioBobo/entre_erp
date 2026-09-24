@@ -1,8 +1,5 @@
 """Shared helpers for the Plano de Pagamentos (monthly cashflow planning)."""
 
-import calendar
-import datetime
-
 import frappe
 from frappe import _
 from frappe.utils import flt
@@ -24,6 +21,10 @@ MESES = [
 
 ESTADO_PAGO = "Pago"
 ESTADO_PROXIMO_MES = "Próximo Mês"
+ESTADO_CANCELADO = "Cancelado"
+# Lines that stay on the sheet but don't count for this month, except for
+# anything already paid on them.
+ESTADOS_FORA_DO_MES = (ESTADO_PROXIMO_MES, ESTADO_CANCELADO)
 
 
 def numero_mes(mes):
@@ -43,12 +44,11 @@ def mes_anterior(ano, mes):
 	return ano, MESES[n - 2]
 
 
-def data_vencimento(ano, mes, dia):
-	if not dia:
-		return None
+def mes_seguinte(ano, mes):
 	n = numero_mes(mes)
-	ultimo_dia = calendar.monthrange(ano, n)[1]
-	return datetime.date(ano, n, min(max(dia, 1), ultimo_dia))
+	if n == 12:
+		return ano + 1, MESES[0]
+	return ano, MESES[n]
 
 
 def criar_plano_do_mes():
@@ -86,7 +86,6 @@ CAMPOS_EDITAVEIS = {
 	"estado",
 	"valor_pago",
 	"metodo_pagamento",
-	"data_vencimento",
 	"categoria",
 	"fornecedor",
 	"factura",
@@ -145,7 +144,7 @@ def atualizar_linha(plano, linha, campo, valor=None):
 
 	row.set(campo, valor or (0 if campo in CAMPOS_NUMERICOS else None))
 	doc.save()
-	return {"linha": row.as_dict(), "plano": _cabecalho(doc)}
+	return {"linha": row.as_dict(), "plano": _cabecalho(doc), "transporte": doc.flags.transporte}
 
 
 @frappe.whitelist()
@@ -164,7 +163,7 @@ def remover_linha(plano, linha):
 	doc = _plano_editavel(plano)
 	doc.remove(_linha(doc, linha))
 	doc.save()
-	return doc.as_dict()
+	return {"plano": doc.as_dict(), "transporte": doc.flags.transporte}
 
 
 @frappe.whitelist()
@@ -209,10 +208,10 @@ def resumo_anual(ano):
 
 	categorias, totais = {}, {}
 	for l in linhas:
-		previsto = flt(l.valor_pago) if l.estado == ESTADO_PROXIMO_MES else flt(l.valor)
+		previsto = flt(l.valor_pago) if l.estado in ESTADOS_FORA_DO_MES else flt(l.valor)
 		pendente = (
 			0.0
-			if l.estado in (ESTADO_PAGO, ESTADO_PROXIMO_MES)
+			if l.estado == ESTADO_PAGO or l.estado in ESTADOS_FORA_DO_MES
 			else max(flt(l.valor) - flt(l.valor_pago), 0.0)
 		)
 		categoria = l.categoria or _("Sem categoria")
