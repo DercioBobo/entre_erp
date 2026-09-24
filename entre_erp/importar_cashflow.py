@@ -78,7 +78,10 @@ CATEGORIAS_POR_PALAVRA = [
 PADRAO_ORDEM_COMPRA = re.compile(r"PUR-ORD-\d{4}-\d+")
 
 
-def importar(caminho, ano=2026, substituir=False):
+def importar(caminho, ano=2026, substituir=False, planos=None):
+	"""`substituir`: True replaces every existing plan, or a list of plan
+	names to replace. `planos`: only import these plan names (None = all)."""
+	ano = int(ano)
 	create_categorias_de_despesa()
 	_criar_metodos_de_pagamento()
 	_criar_despesas_recorrentes()
@@ -86,8 +89,10 @@ def importar(caminho, ano=2026, substituir=False):
 	resultado = []
 	for plano in ler_cashflow(caminho, ano):
 		nome = nome_plano(plano["tipo"], ano, plano.get("mes"))
+		if planos is not None and nome not in planos:
+			continue
 		if frappe.db.exists("Plano de Pagamentos", nome):
-			if not substituir:
+			if not (substituir is True or (isinstance(substituir, (list, tuple)) and nome in substituir)):
 				resultado.append(f"{nome}: já existe, ignorado")
 				continue
 			frappe.delete_doc("Plano de Pagamentos", nome, ignore_permissions=True)
@@ -111,6 +116,63 @@ def importar(caminho, ano=2026, substituir=False):
 	frappe.db.commit()
 	print("\n".join(resultado))
 	return resultado
+
+
+# ----------------------------------------------------------------------
+# Import from the Cashflow page (upload → preview → import)
+# ----------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def pre_visualizar_ficheiro(file_url, ano):
+	"""What each sheet would become, without saving anything."""
+	frappe.has_permission("Plano de Pagamentos", "create", throw=True)
+	ano = int(ano)
+
+	resultado = []
+	for plano in ler_cashflow(_caminho_do_ficheiro(file_url), ano):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Plano de Pagamentos",
+				"tipo": plano["tipo"],
+				"ano": ano,
+				"mes": plano.get("mes"),
+				"linhas": plano["linhas"],
+			}
+		)
+		doc._preencher_linhas()
+		doc._calcular_totais()
+		nome = nome_plano(plano["tipo"], ano, plano.get("mes"))
+		resultado.append(
+			{
+				"nome": nome,
+				"titulo": plano.get("mes") or "Investimentos",
+				"linhas": len(doc.linhas),
+				"total_previsto": doc.total_previsto,
+				"total_pago": doc.total_pago,
+				"total_remanescente": doc.total_remanescente,
+				"existe": bool(frappe.db.exists("Plano de Pagamentos", nome)),
+				"avisos": plano["avisos"],
+			}
+		)
+	return resultado
+
+
+@frappe.whitelist()
+def importar_ficheiro(file_url, ano, planos, substituir=None):
+	frappe.has_permission("Plano de Pagamentos", "create", throw=True)
+	substituir = frappe.parse_json(substituir) or []
+	if substituir:
+		frappe.has_permission("Plano de Pagamentos", "delete", throw=True)
+	return importar(
+		_caminho_do_ficheiro(file_url), ano, substituir=substituir, planos=frappe.parse_json(planos) or []
+	)
+
+
+def _caminho_do_ficheiro(file_url):
+	ficheiro = frappe.get_doc("File", {"file_url": file_url})
+	ficheiro.check_permission("read")
+	return ficheiro.get_full_path()
 
 
 # ----------------------------------------------------------------------

@@ -98,7 +98,10 @@ class CashflowSheet {
 						<span class="cf-ano-valor"></span>
 						<button class="btn btn-default btn-sm cf-ano-seg" title="${__("Ano seguinte")}">›</button>
 					</div>
-					<div class="cf-topo-acoes"></div>
+					<div class="cf-topo-direita">
+						<div class="cf-topo-acoes"></div>
+						<button class="btn btn-default btn-sm cf-importar">${__("Importar Excel")}</button>
+					</div>
 				</div>
 				<div class="cf-conteudo"></div>
 				<div class="cf-abas"></div>
@@ -107,6 +110,7 @@ class CashflowSheet {
 
 		this.$body.find(".cf-ano-ant").on("click", () => this.mudar_ano(-1));
 		this.$body.find(".cf-ano-seg").on("click", () => this.mudar_ano(1));
+		this.$body.find(".cf-importar").on("click", () => this.importar_excel());
 		this.$body.on("click", ".cf-aba", (e) => this.abrir_aba($(e.currentTarget).attr("data-aba")));
 
 		this.carregar_ano();
@@ -456,6 +460,110 @@ class CashflowSheet {
 	}
 
 	// ------------------------------------------------------------------
+	// Import from Excel (upload → preview → choose sheets → import)
+	// ------------------------------------------------------------------
+
+	importar_excel() {
+		new frappe.ui.FileUploader({
+			allow_multiple: false,
+			restrictions: { allowed_file_types: [".xlsx"] },
+			on_success: (file) => {
+				frappe
+					.xcall("entre_erp.importar_cashflow.pre_visualizar_ficheiro", { file_url: file.file_url, ano: this.ano })
+					.then((folhas) => this.dialogo_importacao(file.file_url, folhas));
+			},
+		});
+	}
+
+	dialogo_importacao(file_url, folhas) {
+		if (!folhas.length) {
+			frappe.msgprint(__("Nenhuma folha reconhecida. Os nomes das folhas devem ser os meses (Janeiro … Dezembro) ou Investimentos."));
+			return;
+		}
+
+		const d = new frappe.ui.Dialog({
+			title: __("Importar Excel para {0}", [this.ano]),
+			size: "extra-large",
+			fields: [{ fieldtype: "HTML", fieldname: "tabela" }],
+			primary_action_label: __("Importar"),
+			primary_action: () => {
+				const marcadas = folhas.filter((_f, i) => d.$wrapper.find(`.cf-imp-check[data-i="${i}"]`).is(":checked"));
+				if (!marcadas.length) return frappe.msgprint(__("Selecione pelo menos uma folha."));
+
+				const substituir = marcadas.filter((f) => f.existe).map((f) => f.nome);
+				const executar = () =>
+					frappe
+						.xcall("entre_erp.importar_cashflow.importar_ficheiro", {
+							file_url,
+							ano: this.ano,
+							planos: marcadas.map((f) => f.nome),
+							substituir,
+						})
+						.then((resultado) => {
+							d.hide();
+							frappe.msgprint({
+								title: __("Importação concluída"),
+								message: `<pre class="cf-imp-resultado">${esc((resultado || []).join("\n"))}</pre>`,
+								wide: true,
+							});
+							this.carregar_ano();
+						});
+
+				if (!substituir.length) return executar();
+				frappe.confirm(
+					__("Os planos {0} já existem e serão <b>substituídos</b> pelos dados do Excel (as alterações feitas no ERP perdem-se). Continuar?", [
+						substituir.join(", "),
+					]),
+					executar,
+				);
+			},
+		});
+
+		d.fields_dict.tabela.$wrapper.html(`
+			<p class="text-muted">${__("Folhas novas vêm marcadas. Folhas de meses que já existem vêm desmarcadas — marque-as para as substituir.")}</p>
+			<table class="table table-bordered cf-imp-tabela">
+				<thead><tr>
+					<th style="width:40px"><input type="checkbox" class="cf-imp-todas"></th>
+					<th>${__("Folha")}</th>
+					<th class="text-right">${__("Linhas")}</th>
+					<th class="text-right">${__("Previsto")}</th>
+					<th class="text-right">${__("Pago")}</th>
+					<th class="text-right">${__("Remanescente")}</th>
+					<th>${__("Situação")}</th>
+					<th>${__("Avisos")}</th>
+				</tr></thead>
+				<tbody>${folhas
+					.map(
+						(f, i) => `<tr>
+							<td><input type="checkbox" class="cf-imp-check" data-i="${i}" ${f.existe ? "" : "checked"}></td>
+							<td><b>${esc(f.titulo)}</b> <span class="text-muted">${esc(f.nome)}</span></td>
+							<td class="text-right">${f.linhas}</td>
+							<td class="text-right">${dinheiro(f.total_previsto)}</td>
+							<td class="text-right">${dinheiro(f.total_pago)}</td>
+							<td class="text-right">${dinheiro(f.total_remanescente)}</td>
+							<td>${
+								f.existe
+									? `<span class="indicator-pill orange">${__("Já existe — substituir")}</span>`
+									: `<span class="indicator-pill green">${__("Novo")}</span>`
+							}</td>
+							<td>${
+								f.avisos.length
+									? `<details><summary>${__("{0} aviso(s)", [f.avisos.length])}</summary>
+										<ul class="cf-imp-avisos">${f.avisos.map((a) => `<li>${esc(a)}</li>`).join("")}</ul></details>`
+									: `<span class="text-muted">—</span>`
+							}</td>
+						</tr>`,
+					)
+					.join("")}</tbody>
+			</table>
+		`);
+		d.$wrapper.find(".cf-imp-todas").on("change", (e) =>
+			d.$wrapper.find(".cf-imp-check").prop("checked", $(e.currentTarget).is(":checked")),
+		);
+		d.show();
+	}
+
+	// ------------------------------------------------------------------
 	// Resumo Anual
 	// ------------------------------------------------------------------
 
@@ -695,7 +803,10 @@ function inject_styles() {
 		.cf-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 		.cf-ano { display: flex; align-items: center; gap: 8px; }
 		.cf-ano-valor { font-size: 18px; font-weight: 600; min-width: 52px; text-align: center; }
-		.cf-topo-acoes { display: flex; align-items: center; gap: 8px; }
+		.cf-topo-direita, .cf-topo-acoes { display: flex; align-items: center; gap: 8px; }
+		.cf-imp-tabela td, .cf-imp-tabela th { vertical-align: top; font-size: 13px; }
+		.cf-imp-avisos { margin: 6px 0 0; padding-left: 16px; font-size: 12px; color: var(--text-muted); }
+		.cf-imp-resultado { white-space: pre-wrap; font-size: 12px; max-height: 60vh; overflow: auto; }
 		.cf-topo-acoes .cf-estado-plano { width: 130px; }
 
 		.cf-vazio { padding: 60px 20px; text-align: center; color: var(--text-muted); }
