@@ -113,6 +113,7 @@ def importar(caminho, ano=2026, substituir=False, planos=None):
 		# moving Próximo Mês lines here would create that month too early
 		# (and the import would then skip it as "já existe").
 		doc.flags.sem_transporte = True
+		doc.flags.importacao = True
 		doc.flags.ignorar_bloqueio = True
 		doc.insert(ignore_permissions=True)
 		resultado.append(

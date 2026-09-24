@@ -9,6 +9,8 @@
   "prioridade",
   "estado",
   "valor_pago",
+  "data_pagamento",
+  "pago_por",
   "metodo_pagamento",
   "column_break_1",
   "categoria",
@@ -62,6 +64,21 @@
    "in_list_view": 1,
    "columns": 1,
    "description": "Preenchido automaticamente com o Valor quando o Estado passa a Pago."
+  },
+  {
+   "fieldname": "data_pagamento",
+   "fieldtype": "Date",
+   "label": "Pago em",
+   "no_copy": 1,
+   "description": "Preenchida automaticamente com a data de hoje quando a linha passa a Pago (pode ser corrigida)."
+  },
+  {
+   "fieldname": "pago_por",
+   "fieldtype": "Link",
+   "label": "Pago por",
+   "options": "User",
+   "no_copy": 1,
+   "read_only": 1
   },
   {
    "fieldname": "metodo_pagamento",

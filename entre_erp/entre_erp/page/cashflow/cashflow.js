@@ -54,6 +54,8 @@ const COLUNAS_PLANO = [
 	{ campo: "prioridade", label: "Prior.", tipo: "select", largura: 90, filtro: true, opcoes: () => ["", "1", "2", "3", "4"] },
 	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, filtro: true, opcoes: () => ESTADOS },
 	{ campo: "valor_pago", label: "Valor Pago", tipo: "num", largura: 120 },
+	{ campo: "data_pagamento", label: "Pago em", tipo: "date", largura: 140 },
+	{ campo: "pago_por", label: "Pago por", tipo: "user", largura: 150, so_leitura: true },
 	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 110, filtro: true, opcoes: (s) => [""].concat(s.metodos) },
 	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, filtro: true, opcoes: (s) => [""].concat(s.categorias) },
 	{ campo: "factura", label: "Factura", tipo: "text", largura: 150 },
@@ -103,6 +105,7 @@ class CashflowSheet {
 		this.categorias = [];
 		this.doc = null;
 		this.fila = Promise.resolve();
+		this.selecionadas = new Set(); // row names ticked for a bulk action
 		// Header filters { campo: Set of values }, kept while switching months
 		// so you can follow e.g. only STB across the year.
 		this.filtros = {};
@@ -229,6 +232,7 @@ class CashflowSheet {
 
 	render_plano(doc) {
 		this.doc = doc;
+		this.selecionadas.clear();
 		const fechado = doc.estado === "Fechado";
 		// Locked while last month still has lines to settle (see bloqueio_do_mes_anterior).
 		const bloqueio = doc.bloqueio;
@@ -276,10 +280,13 @@ class CashflowSheet {
 				<button class="btn btn-link btn-sm cf-limpar-filtros">✕ ${__("Limpar filtros")}</button>
 				<span class="cf-contagem text-muted"></span>
 			</div>
+			<div class="cf-lote"></div>
 			<div class="cf-grelha-wrap">
 				<table class="cf-grelha">
 					<thead><tr>
-						<th class="cf-idx">#</th>
+						<th class="cf-idx">${
+							so_leitura ? "#" : `<input type="checkbox" class="cf-sel-todas" title="${__("Selecionar as linhas visíveis")}">`
+						}</th>
 						${COLUNAS_PLANO.map(
 							(c) => `<th class="${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}${
 								c.filtro
@@ -314,7 +321,7 @@ class CashflowSheet {
 	html_linha(row, idx, so_leitura) {
 		return `
 			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"}">
-				<td class="cf-idx">${idx}</td>
+				<td class="cf-idx"><span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
 				${COLUNAS_PLANO.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura)}</td>`).join("")}
 				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
 			</tr>`;
@@ -456,6 +463,52 @@ class CashflowSheet {
 			}
 		});
 
+		$c.on("change", ".cf-sel", (e) => {
+			const $tr = $(e.currentTarget).closest("tr");
+			const nome = $tr.attr("data-name");
+			if (e.currentTarget.checked) this.selecionadas.add(nome);
+			else this.selecionadas.delete(nome);
+			$tr.toggleClass("cf-selecionada", e.currentTarget.checked);
+			this.atualizar_barra_lote();
+		});
+		$c.on("change", ".cf-sel-todas", (e) => {
+			const marcar = e.currentTarget.checked;
+			$c.find("tbody tr:visible").each((_i, tr) => {
+				$(tr).toggleClass("cf-selecionada", marcar).find(".cf-sel").prop("checked", marcar);
+				if (marcar) this.selecionadas.add(tr.getAttribute("data-name"));
+				else this.selecionadas.delete(tr.getAttribute("data-name"));
+			});
+			this.atualizar_barra_lote();
+		});
+		$c.on("click", ".cf-lote-op", (e) => {
+			const $el = $(e.currentTarget);
+			this.aplicar_lote({ [$el.attr("data-campo")]: $el.attr("data-valor") });
+		});
+		$c.on("click", ".cf-lote-pagar", () => this.aplicar_lote({ estado: "Pago" }));
+		$c.on("click", ".cf-lote-data", () =>
+			frappe.prompt(
+				{ fieldtype: "Date", fieldname: "data", label: __("Pago em"), default: frappe.datetime.get_today(), reqd: 1 },
+				(v) => this.aplicar_lote({ data_pagamento: v.data }),
+				__("Data de pagamento"),
+				__("Aplicar"),
+			),
+		);
+		$c.on("click", ".cf-lote-remover", () =>
+			frappe.confirm(__("Remover {0} linha(s)?", [this.selecionadas.size]), () =>
+				this.guardar(() =>
+					frappe
+						.xcall(API + "remover_linhas", { plano: this.doc.name, linhas: [...this.selecionadas] })
+						.then((r) => this.depois_do_lote(r, __("{0} linha(s) removida(s).", [this.selecionadas.size]))),
+				),
+			),
+		);
+		$c.on("click", ".cf-lote-limpar", () => {
+			this.selecionadas.clear();
+			$c.find(".cf-sel, .cf-sel-todas").prop("checked", false);
+			$c.find("tr.cf-selecionada").removeClass("cf-selecionada");
+			this.atualizar_barra_lote();
+		});
+
 		$c.on("input", ".cf-pesquisa", (e) => {
 			this.pesquisa = $(e.currentTarget).val();
 			this.aplicar_filtros();
@@ -565,6 +618,68 @@ class CashflowSheet {
 		});
 	}
 
+	// ------------------------------------------------------------------
+	// Bulk actions
+	// ------------------------------------------------------------------
+
+	atualizar_barra_lote() {
+		const n = this.selecionadas.size;
+		const $barra = this.$conteudo.find(".cf-lote");
+		this.$conteudo.find(".cf-grelha").toggleClass("cf-selecionando", n > 0);
+		const $todas = this.$conteudo.find(".cf-sel-todas");
+		const visiveis = this.$conteudo.find("tbody tr:visible").length;
+		$todas.prop("checked", n > 0 && n === visiveis).prop("indeterminate", n > 0 && n < visiveis);
+		if (!n) {
+			$barra.removeClass("visivel").empty();
+			return;
+		}
+
+		let total = 0;
+		this.selecionadas.forEach((nome) => {
+			total += flt(this.$conteudo.find(`tr[data-name="${nome}"] [data-campo="valor"]`).val());
+		});
+
+		const menu = (label, campo, opcoes) => `
+			<div class="btn-group">
+				<button class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown">${label} <span class="caret"></span></button>
+				<div class="dropdown-menu">${opcoes
+					.map(
+						(o) => `<a class="dropdown-item cf-lote-op" data-campo="${campo}" data-valor="${esc(o)}">${
+							o ? esc(o) : `<i class="text-muted">${__("(nenhum)")}</i>`
+						}</a>`,
+					)
+					.join("")}</div>
+			</div>`;
+
+		$barra.addClass("visivel").html(`
+			<span class="cf-lote-info"><b>${__("{0} selecionada(s)", [n])}</b> · ${dinheiro(total)}</span>
+			<button class="btn btn-primary btn-xs cf-lote-pagar">✓ ${__("Marcar como Pago")}</button>
+			${menu(__("Estado"), "estado", ESTADOS)}
+			${menu(__("Método"), "metodo_pagamento", [""].concat(this.metodos))}
+			${menu(__("Categoria"), "categoria", [""].concat(this.categorias))}
+			${menu(__("Prior."), "prioridade", ["", "1", "2", "3", "4"])}
+			<button class="btn btn-default btn-xs cf-lote-data">${__("Pago em…")}</button>
+			<button class="btn btn-default btn-xs cf-lote-remover">${__("Remover")}</button>
+			<button class="btn btn-link btn-xs cf-lote-limpar" title="${__("Limpar seleção")}">✕</button>
+		`);
+	}
+
+	aplicar_lote(valores) {
+		const linhas = [...this.selecionadas];
+		this.guardar(() =>
+			frappe
+				.xcall(API + "atualizar_linhas", { plano: this.doc.name, linhas, valores })
+				.then((r) => this.depois_do_lote(r, __("{0} linha(s) atualizada(s).", [linhas.length]))),
+		);
+	}
+
+	depois_do_lote(r, mensagem) {
+		this.render_plano(r.plano);
+		frappe.show_alert({ message: mensagem, indicator: "green" });
+		if (r.transporte) this.anunciar_transporte(r.transporte);
+		if (r.cabecalho && r.cabecalho.fechado_automaticamente) this.anunciar_fecho();
+	}
+
 	anunciar_fecho() {
 		const [ano, mes] = mes_seguinte(this.doc.ano, this.doc.mes);
 		const $alerta = frappe.show_alert(
@@ -608,7 +723,11 @@ class CashflowSheet {
 			}
 			$tr.toggle(mostrar);
 			if (mostrar) visiveis++;
+			else if (this.selecionadas.delete($tr.attr("data-name"))) {
+				$tr.removeClass("cf-selecionada").find(".cf-sel").prop("checked", false);
+			}
 		});
+		this.atualizar_barra_lote();
 
 		this.$conteudo.find(".cf-filtro-btn").each((_i, el) => {
 			$(el).toggleClass("ativo", !!this.filtros[el.getAttribute("data-campo")]);
@@ -1018,6 +1137,8 @@ function html_celula(coluna, valor, sheet, desativado = false) {
 			return `<input ${attrs} inputmode="numeric" value="${valor ? esc(valor) : ""}">`;
 		case "date":
 			return `<input ${attrs} type="date" value="${esc(valor || "")}">`;
+		case "user":
+			return `<span class="cf-cell cf-leitura" data-campo="${coluna.campo}">${esc(nome_utilizador(valor))}</span>`;
 		case "check":
 			return `<input type="checkbox" ${attrs.replace('class="cf-cell ', 'class="cf-cell cf-check ')} ${valor ? "checked" : ""}>`;
 		case "select": {
@@ -1042,7 +1163,12 @@ function ler_celula(coluna, $el) {
 	return $el.val();
 }
 
+function nome_utilizador(user) {
+	return user ? (frappe.user_info(user) || {}).fullname || user : "";
+}
+
 function escrever_celula(coluna, $el, valor) {
+	if (coluna.tipo === "user") return $el.text(nome_utilizador(valor));
 	if (coluna.tipo === "num") return $el.val(valor ? dinheiro(valor) : "");
 	if (coluna.tipo === "check") return $el.prop("checked", !!valor);
 	$el.val(valor == null ? "" : valor);
@@ -1154,6 +1280,23 @@ function inject_styles() {
 		.cf-grelha .cf-fixa { position: sticky; left: 0; z-index: 1; }
 		.cf-grelha thead .cf-fixa { z-index: 3; }
 		.cf-grelha .cf-idx { width: 36px; text-align: center; color: var(--text-muted); font-size: 11px; padding: 0 4px; }
+		/* Row number turns into a checkbox on hover / while selecting */
+		.cf-idx .cf-sel { display: none; margin: 0; vertical-align: middle; }
+		.cf-grelha tbody tr:hover .cf-sel, .cf-selecionando .cf-sel { display: inline-block; }
+		.cf-grelha tbody tr:hover .cf-idx .cf-n:not(:only-child), .cf-selecionando .cf-idx .cf-n { display: none; }
+		.cf-idx .cf-sel-todas { margin: 0; vertical-align: middle; }
+		.cf-grelha tbody tr.cf-selecionada > td { background: rgba(59, 130, 246, 0.1); }
+		.cf-cell.cf-leitura { display: block; line-height: 20px; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+
+		.cf-lote { display: none; }
+		.cf-lote.visivel {
+			display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+			padding: 6px 10px; border-radius: 8px; border: 1px solid var(--primary);
+			background: rgba(59, 130, 246, 0.08);
+		}
+		.cf-lote-info { margin-right: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+		.cf-lote .dropdown-menu { max-height: 300px; overflow-y: auto; }
+		.cf-lote .dropdown-item { cursor: pointer; }
 		.cf-grelha .cf-num { text-align: right; }
 		.cf-grelha .cf-acoes { width: 32px; text-align: center; }
 		.cf-grelha .cf-remover { color: var(--text-muted); font-size: 16px; line-height: 1; padding: 0 6px; }

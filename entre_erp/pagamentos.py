@@ -20,6 +20,7 @@ MESES = [
 ]
 
 ESTADO_PAGO = "Pago"
+ESTADO_PARCIAL = "Parcialmente Pago"
 ESTADO_PROXIMO_MES = "Próximo Mês"
 ESTADO_CANCELADO = "Cancelado"
 # Lines that stay on the sheet but don't count for this month, except for
@@ -119,6 +120,7 @@ CAMPOS_EDITAVEIS = {
 	"prioridade",
 	"estado",
 	"valor_pago",
+	"data_pagamento",
 	"metodo_pagamento",
 	"categoria",
 	"fornecedor",
@@ -166,22 +168,25 @@ def criar_plano(ano, tipo="Mensal", mes=None):
 
 @frappe.whitelist()
 def atualizar_linha(plano, linha, campo, valor=None):
-	if campo not in CAMPOS_EDITAVEIS:
-		frappe.throw(_("Campo não editável: {0}").format(campo))
-
 	doc = _plano_editavel(plano)
 	row = _linha(doc, linha)
-
-	if campo in CAMPOS_NUMERICOS:
-		valor = flt(valor)
-	elif campo == "estado" and row.estado == ESTADO_PAGO and valor not in (ESTADO_PAGO, "Parcialmente Pago"):
-		# Undoing a "Pago": drop the amount that was auto-filled with it.
-		if flt(row.valor_pago) == flt(row.valor):
-			row.valor_pago = 0
-
-	row.set(campo, valor or (0 if campo in CAMPOS_NUMERICOS else None))
+	_aplicar(row, campo, valor)
 	doc.save()
 	return {"linha": row.as_dict(), "plano": _cabecalho(doc), "transporte": doc.flags.transporte}
+
+
+@frappe.whitelist()
+def atualizar_linhas(plano, linhas, valores):
+	"""Bulk edit: the same values on several lines, in a single save — so
+	moving to Próximo Mês and auto-closing happen once for the whole batch."""
+	linhas, valores = frappe.parse_json(linhas), frappe.parse_json(valores)
+	doc = _plano_editavel(plano)
+	for nome in linhas:
+		row = _linha(doc, nome)
+		for campo, valor in valores.items():
+			_aplicar(row, campo, valor)
+	doc.save()
+	return _resposta_completa(doc)
 
 
 @frappe.whitelist()
@@ -197,10 +202,16 @@ def adicionar_linha(plano, descricao):
 
 @frappe.whitelist()
 def remover_linha(plano, linha):
+	return remover_linhas(plano, [linha])
+
+
+@frappe.whitelist()
+def remover_linhas(plano, linhas):
 	doc = _plano_editavel(plano)
-	doc.remove(_linha(doc, linha))
+	for nome in frappe.parse_json(linhas):
+		doc.remove(_linha(doc, nome))
 	doc.save()
-	return {"plano": doc.as_dict(), "transporte": doc.flags.transporte}
+	return _resposta_completa(doc)
 
 
 @frappe.whitelist()
@@ -276,6 +287,24 @@ def resumo_anual(ano):
 		],
 		"totais": totais,
 	}
+
+
+def _aplicar(row, campo, valor):
+	if campo not in CAMPOS_EDITAVEIS:
+		frappe.throw(_("Campo não editável: {0}").format(campo))
+
+	if campo in CAMPOS_NUMERICOS:
+		valor = flt(valor)
+	elif campo == "estado" and row.estado == ESTADO_PAGO and valor not in (ESTADO_PAGO, ESTADO_PARCIAL):
+		# Undoing a "Pago": drop the amount that was auto-filled with it.
+		if flt(row.valor_pago) == flt(row.valor):
+			row.valor_pago = 0
+
+	row.set(campo, valor or (0 if campo in CAMPOS_NUMERICOS else None))
+
+
+def _resposta_completa(doc):
+	return {"plano": doc.as_dict(), "cabecalho": _cabecalho(doc), "transporte": doc.flags.transporte}
 
 
 def _plano_editavel(plano):

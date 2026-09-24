@@ -5,6 +5,7 @@ from frappe.utils import flt
 
 from entre_erp.pagamentos import (
 	ESTADO_PAGO,
+	ESTADO_PARCIAL,
 	ESTADO_PROXIMO_MES,
 	ESTADOS_FORA_DO_MES,
 	ESTADOS_LIQUIDADOS,
@@ -270,10 +271,28 @@ class PlanodePagamentos(Document):
 			)
 
 	def _preencher_linhas(self):
+		antes = self.get_doc_before_save()
+		estado_antes = {r.name: r.estado for r in (antes.linhas if antes else [])}
 		for row in self.linhas:
 			row.valor_pago = valor_pago_da_linha(row)
 			if row.despesa_recorrente and not row.categoria:
 				row.categoria = frappe.db.get_value("Despesa Recorrente", row.despesa_recorrente, "categoria")
+			self._registar_pagamento(row, estado_antes.get(row.name))
+
+	def _registar_pagamento(self, row, estado_antes):
+		"""Stamps "Pago em" (today, editable) and "Pago por" the moment a line
+		becomes Pago / Parcialmente Pago; clears them when it goes back to
+		unpaid. Imported lines keep an empty date — it isn't known."""
+		pagos = (ESTADO_PAGO, ESTADO_PARCIAL)
+		if row.estado not in pagos:
+			if not flt(row.valor_pago):
+				row.data_pagamento = None
+				row.pago_por = None
+			return
+		if estado_antes in pagos or self.flags.importacao:
+			return
+		row.data_pagamento = row.data_pagamento or frappe.utils.today()
+		row.pago_por = row.pago_por or frappe.session.user
 
 	def _calcular_totais(self):
 		"""Mirrors the spreadsheet: Previsto / Pago / Remanescente, plus the
