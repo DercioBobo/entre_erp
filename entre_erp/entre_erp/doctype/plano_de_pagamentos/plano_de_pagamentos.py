@@ -3,6 +3,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 
+from entre_erp.caixa import apagar_reforcos_do_plano, sincronizar_reforcos
 from entre_erp.pagamentos import (
 	ESTADO_PAGO,
 	ESTADO_PARCIAL,
@@ -33,6 +34,10 @@ class PlanodePagamentos(Document):
 
 	def on_update(self):
 		self._sincronizar_proximo_mes()
+		sincronizar_reforcos(self)
+
+	def on_trash(self):
+		apagar_reforcos_do_plano(self)
 
 	# ------------------------------------------------------------------
 	# Buttons (plano_de_pagamentos.js)

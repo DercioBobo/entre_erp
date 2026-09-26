@@ -13,6 +13,7 @@ All amounts are in the company currency.
 import frappe
 from frappe.utils import flt, getdate
 
+from entre_erp import caixa
 from entre_erp.pagamentos import (
 	ESTADO_PAGO,
 	ESTADOS_FORA_DO_MES,
@@ -115,6 +116,7 @@ def obter_painel(ano, company=None):
 			as_dict=True,
 		),
 		"categorias": _saidas_por_categoria(ano),
+		"caixa": caixa.resumo_atual(),
 		"mes_atual": _mes_atual(ano, planos),
 	}
 

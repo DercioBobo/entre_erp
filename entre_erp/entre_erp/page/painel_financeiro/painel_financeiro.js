@@ -103,6 +103,12 @@ class PainelFinanceiro {
 							)
 						: ""
 				}
+				${this.card(
+					`💰 ${__("Caixa (saldo actual)")}`,
+					d.caixa.saldo_atual,
+					__("Gastos em {0}: {1}", [d.caixa.mes, pf_dinheiro(d.caixa.gastos)]),
+					d.caixa.saldo_atual < 0 ? "pf-negativo" : "",
+				)}
 			</div>
 
 			<div class="pf-bloco">
@@ -325,7 +331,7 @@ function pf_inject_styles() {
 		.pf-alerta-ok { border-color: var(--pf-verde); background: rgba(22, 163, 74, 0.08); }
 
 		.pf-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
-		.pf-cards-pequenos { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
+		.pf-cards-pequenos { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
 		.pf-card { padding: 12px 14px; border-radius: 8px; background: var(--fg-color); border: 1px solid var(--border-color); }
 		.pf-card-destaque { border-width: 2px; }
 		.pf-card-label { font-size: 12px; color: var(--text-muted); }

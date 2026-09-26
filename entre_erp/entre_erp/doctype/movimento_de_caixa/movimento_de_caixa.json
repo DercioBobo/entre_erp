@@ -1,0 +1,139 @@
+{
+ "actions": [],
+ "autoname": "CX-.YYYY.-.#####",
+ "creation": "2026-09-26 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "data",
+  "tipo",
+  "descricao",
+  "column_break_1",
+  "valor",
+  "categoria",
+  "section_break_obs",
+  "observacoes",
+  "plano",
+  "linha_plano"
+ ],
+ "fields": [
+  {
+   "fieldname": "data",
+   "fieldtype": "Date",
+   "label": "Data",
+   "reqd": 1,
+   "default": "Today",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "tipo",
+   "fieldtype": "Select",
+   "label": "Tipo",
+   "options": "Gasto\nReforço",
+   "default": "Gasto",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Reforço: dinheiro que entra na caixa (vem automaticamente do plano quando a linha Caixa é paga, ou manual — ex.: saldo inicial). Gasto: o que se pagou com a caixa."
+  },
+  {
+   "fieldname": "descricao",
+   "fieldtype": "Data",
+   "label": "Descrição",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "valor",
+   "fieldtype": "Currency",
+   "label": "Valor",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "categoria",
+   "fieldtype": "Link",
+   "label": "Categoria",
+   "options": "Categoria de Despesa",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_break_obs",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "observacoes",
+   "fieldtype": "Small Text",
+   "label": "Observações"
+  },
+  {
+   "fieldname": "plano",
+   "fieldtype": "Link",
+   "label": "Plano de Pagamentos",
+   "options": "Plano de Pagamentos",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Preenchido nos reforços automáticos: o plano cuja linha Caixa foi paga."
+  },
+  {
+   "fieldname": "linha_plano",
+   "fieldtype": "Data",
+   "label": "Linha do Plano",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-26 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Movimento de Caixa",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "System Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "data",
+ "sort_order": "DESC",
+ "title_field": "descricao",
+ "track_changes": 1
+}

@@ -51,6 +51,17 @@ const ESTADOS_PLANO = ["Rascunho", "Em Curso", "Fechado"];
 const ABA_RESUMO = "Resumo";
 const ABA_INVESTIMENTOS = "Investimentos";
 const ABA_RECORRENTES = "Recorrentes";
+const ABA_CAIXA = "Caixa";
+const API_CAIXA = "entre_erp.caixa.";
+
+const COLUNAS_CAIXA = [
+	{ campo: "data", label: "Data", tipo: "date", largura: 130 },
+	{ campo: "descricao", label: "Descrição", tipo: "text", largura: 280, fixa: true },
+	{ campo: "tipo", label: "Tipo", tipo: "select", largura: 110, opcoes: () => ["Gasto", "Reforço"] },
+	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, opcoes: (s) => [""].concat(s.categorias) },
+	{ campo: "valor", label: "Valor", tipo: "num", largura: 120 },
+	{ campo: "observacoes", label: "Observações", tipo: "text", largura: 300 },
+];
 
 // Columns of a month / investments sheet. `opcoes` gets the sheet, so
 // select lists can come from the server (payment methods, categories).
@@ -198,7 +209,8 @@ class CashflowSheet {
 			aba(ABA_RESUMO, __("Resumo Anual"), "cf-aba-especial") +
 				MESES.map((m, i) => aba(m, ponto(m) + MESES_CURTOS[i])).join("") +
 				aba(ABA_INVESTIMENTOS, ponto(ABA_INVESTIMENTOS) + __("Investimentos"), "cf-aba-especial") +
-				aba(ABA_RECORRENTES, __("Recorrentes"), "cf-aba-especial"),
+				aba(ABA_RECORRENTES, __("Recorrentes"), "cf-aba-especial") +
+				aba(ABA_CAIXA, `💰 ${__("Caixa")}`, "cf-aba-especial"),
 		);
 		const ativa = $abas.find(".cf-aba.active")[0];
 		if (ativa) ativa.scrollIntoView({ inline: "nearest", block: "nearest" });
@@ -215,6 +227,7 @@ class CashflowSheet {
 
 		if (aba === ABA_RESUMO) return this.carregar_resumo();
 		if (aba === ABA_RECORRENTES) return this.carregar_recorrentes();
+		if (aba === ABA_CAIXA) return this.carregar_caixa();
 
 		const nome = nome_plano(this.ano, aba);
 		if (!this.planos[nome]) return this.render_sem_plano(aba);
@@ -365,6 +378,9 @@ class CashflowSheet {
 			const [, mes] = mes_seguinte(this.doc.ano, this.doc.mes);
 			html += `<button class="cf-salto" data-ir="seguinte" title="${__("Ver esta linha em {0}", [mes])}">→ ${curto(mes)}</button>`;
 		}
+		if (this.doc.tipo === "Mensal" && e_linha_de_caixa(row)) {
+			html += `<button class="cf-salto-caixa" title="${__("Ver os movimentos da Caixa de {0}", [this.doc.mes])}">💰 ${__("Caixa")}</button>`;
+		}
 		if (row.linha_origem) {
 			const [, mes] = mes_anterior(this.doc.ano, this.doc.mes);
 			html += `<button class="cf-salto" data-ir="anterior" title="${__("Veio de {0} (Próximo Mês)", [mes])}">← ${curto(mes)}</button>`;
@@ -499,6 +515,14 @@ class CashflowSheet {
 			const b = this.doc.bloqueio;
 			this.ir_para(b.ano, b.mes, null);
 			this.so_por_pagar = true;
+		});
+
+		$c.on("click", ".cf-salto-caixa", () => {
+			this.caixa_ano = this.doc.ano;
+			this.caixa_mes = this.doc.mes;
+			this.aba = ABA_CAIXA;
+			this.render_abas();
+			this.abrir_aba(ABA_CAIXA);
 		});
 
 		$c.on("click", ".cf-salto", (e) => {
@@ -1184,6 +1208,190 @@ class CashflowSheet {
 	}
 
 	// ------------------------------------------------------------------
+	// Caixa (petty cash) — its own running balance, month by month
+	// ------------------------------------------------------------------
+
+	carregar_caixa(focar) {
+		const hoje = new Date();
+		this.caixa_ano = this.caixa_ano || hoje.getFullYear();
+		this.caixa_mes = this.caixa_mes || MESES[hoje.getMonth()];
+		frappe
+			.xcall(API_CAIXA + "obter_caixa", { ano: this.caixa_ano, mes: this.caixa_mes })
+			.then((d) => this.render_caixa(d, focar));
+	}
+
+	mudar_mes_caixa(delta) {
+		const [ano, mes] = (delta > 0 ? mes_seguinte : mes_anterior)(this.caixa_ano, this.caixa_mes);
+		this.caixa_ano = ano;
+		this.caixa_mes = mes;
+		this.carregar_caixa();
+	}
+
+	render_caixa(d, focar) {
+		this.caixa = d;
+		this.$conteudo.html(`
+			<div class="cf-caixa-topo">
+				<div class="cf-ano">
+					<button class="btn btn-default btn-sm cf-caixa-ant" title="${__("Mês anterior")}">‹</button>
+					<span class="cf-caixa-mes">${esc(d.mes)} ${d.ano}</span>
+					<button class="btn btn-default btn-sm cf-caixa-seg" title="${__("Mês seguinte")}">›</button>
+				</div>
+				<span class="text-muted cf-ajuda">${__("Os reforços entram sozinhos quando a linha Caixa do plano é paga. Registe aqui cada gasto.")}</span>
+			</div>
+			<div class="cf-cabecalho cf-caixa-resumo"></div>
+			<div class="cf-grelha-wrap">
+				<table class="cf-grelha">
+					<thead><tr>
+						<th class="cf-idx">#</th>
+						${COLUNAS_CAIXA.map((c) => `<th class="${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}</th>`).join("")}
+						<th class="cf-num" style="min-width:120px">${__("Saldo")}</th>
+						<th style="min-width:90px"></th>
+					</tr></thead>
+					<tbody>${d.movimentos.map((m, i) => this.html_movimento(m, i + 1)).join("")}</tbody>
+					<tfoot>
+						<tr class="cf-nova"><td class="cf-idx">+</td>${COLUNAS_CAIXA.map((c) =>
+							c.fixa
+								? `<td class="cf-fixa"><input class="cf-cell cf-nova-input" placeholder="${__("Novo gasto… (Enter)")}"></td>`
+								: "<td></td>",
+						).join("")}<td></td><td></td></tr>
+					</tfoot>
+				</table>
+			</div>
+		`);
+		this.render_resumo_caixa(d.resumo);
+		this.recalcular_saldos_caixa();
+		this.bind_caixa();
+		if (focar) this.$conteudo.find(`tr[data-name="${focar}"] [data-campo="valor"]`).trigger("focus");
+	}
+
+	html_movimento(m, idx) {
+		// Top-ups that come from a plan can only be changed there.
+		const do_plano = !!m.plano;
+		const mes_plano = do_plano ? MESES[cint(m.plano.split("-")[2]) - 1] : null;
+		return `
+			<tr data-name="${esc(m.name)}" class="${m.tipo === "Reforço" ? "cf-reforco" : ""}">
+				<td class="cf-idx">${idx}</td>
+				${COLUNAS_CAIXA.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, m[c.campo], this, do_plano && c.campo !== "observacoes" && c.campo !== "categoria")}</td>`).join("")}
+				<td class="cf-num cf-saldo"></td>
+				<td class="cf-acoes">${
+					do_plano
+						? `<button class="cf-salto-plano" data-plano="${esc(m.plano)}" data-linha="${esc(m.linha_plano)}" data-mes="${esc(mes_plano)}" title="${__("Vem do plano {0}", [m.plano])}">↗ ${curto(mes_plano)}</button>`
+						: `<button class="btn btn-xs btn-link cf-remover" title="${__("Remover")}">×</button>`
+				}</td>
+			</tr>`;
+	}
+
+	render_resumo_caixa(r) {
+		this.caixa.resumo = r;
+		const card = (label, valor, cls = "") =>
+			`<div class="cf-kpi"><div class="cf-kpi-label">${label}</div><div class="cf-kpi-valor ${cls}">${dinheiro(valor)}</div></div>`;
+		this.$conteudo.find(".cf-caixa-resumo").html(`
+			<div class="cf-kpis cf-kpis-5">
+				${card(__("Saldo actual"), r.saldo_atual, r.saldo_atual < 0 ? "cf-vermelho" : "cf-verde")}
+				${card(__("Saldo no início do mês"), r.saldo_inicial)}
+				${card(__("Reforços do mês"), r.reforcos, "cf-verde")}
+				${card(__("Gastos do mês"), r.gastos, r.gastos ? "cf-laranja" : "")}
+				${card(__("Saldo no fim do mês"), r.saldo_final, r.saldo_final < 0 ? "cf-vermelho" : "")}
+			</div>
+			<div class="cf-metodos">${r.por_categoria
+				.map((c) => `<span class="cf-metodo"><b>${esc(c.categoria)}</b> ${dinheiro(c.valor)}</span>`)
+				.join("")}</div>
+		`);
+	}
+
+	// Running balance, top to bottom, starting from the month's opening balance.
+	recalcular_saldos_caixa() {
+		let saldo = this.caixa.resumo.saldo_inicial;
+		this.$conteudo.find("tbody tr").each((_i, tr) => {
+			const $tr = $(tr);
+			const valor = flt($tr.find('[data-campo="valor"]').val());
+			const reforco = $tr.find('[data-campo="tipo"]').val() === "Reforço";
+			saldo += reforco ? valor : -valor;
+			$tr.toggleClass("cf-reforco", reforco);
+			$tr.find(".cf-saldo").text(dinheiro(saldo)).toggleClass("cf-vermelho", saldo < 0);
+		});
+	}
+
+	bind_caixa() {
+		const $c = this.$conteudo.off();
+		const args = () => ({ ano: this.caixa_ano, mes: this.caixa_mes });
+
+		$c.find(".cf-caixa-ant").on("click", () => this.mudar_mes_caixa(-1));
+		$c.find(".cf-caixa-seg").on("click", () => this.mudar_mes_caixa(1));
+
+		$c.on("change", "tbody .cf-cell", (e) => {
+			const $el = $(e.currentTarget);
+			const coluna = COLUNAS_CAIXA.find((c) => c.campo === $el.attr("data-campo"));
+			const valor = ler_celula(coluna, $el);
+			this.recalcular_saldos_caixa();
+			this.guardar(() =>
+				frappe
+					.xcall(API_CAIXA + "atualizar_movimento", {
+						nome: $el.closest("tr").attr("data-name"),
+						campo: coluna.campo,
+						valor,
+						...args(),
+					})
+					.then((r) => this.render_resumo_caixa(r.resumo)),
+			);
+		});
+
+		$c.on("keydown", "tbody .cf-cell", (e) => {
+			if (e.key !== "Enter") return;
+			e.preventDefault();
+			const campo = $(e.currentTarget).attr("data-campo");
+			const $prox = $(e.currentTarget).closest("tr").next();
+			const $alvo = $prox.length ? $prox.find(`[data-campo="${campo}"]`) : $c.find(".cf-nova-input");
+			($alvo.length ? $alvo : $(e.currentTarget)).trigger("focus");
+		});
+
+		$c.on("focus", "tbody .cf-data", (e) => {
+			const el = e.currentTarget;
+			if (el.disabled) return;
+			el.type = "date";
+			el.value = el.dataset.iso || "";
+		});
+		$c.on("blur", "tbody .cf-data", (e) => {
+			const el = e.currentTarget;
+			if (el.type === "date") el.dataset.iso = el.value;
+			el.type = "text";
+			el.value = data_utilizador(el.dataset.iso);
+		});
+		$c.on("blur", "tbody .cf-dinheiro", (e) => {
+			const v = flt($(e.currentTarget).val());
+			$(e.currentTarget).val(v ? dinheiro(v) : "");
+		});
+
+		$c.on("keydown", ".cf-nova-input", (e) => {
+			const descricao = $(e.currentTarget).val().trim();
+			if (e.key !== "Enter" || !descricao) return;
+			this.guardar(() =>
+				frappe
+					.xcall(API_CAIXA + "adicionar_movimento", { descricao, ...args() })
+					.then((r) => this.render_caixa(r.caixa, r.nome)),
+			);
+		});
+
+		$c.on("click", ".cf-remover", (e) => {
+			const $tr = $(e.currentTarget).closest("tr");
+			const descricao = $tr.find('[data-campo="descricao"]').val();
+			frappe.confirm(__("Remover {0}?", [`<b>${esc(descricao)}</b>`]), () =>
+				this.guardar(() =>
+					frappe
+						.xcall(API_CAIXA + "remover_movimentos", { nomes: [$tr.attr("data-name")], ...args() })
+						.then((d) => this.render_caixa(d)),
+				),
+			);
+		});
+
+		$c.on("click", ".cf-salto-plano", (e) => {
+			const $b = $(e.currentTarget);
+			const ano = cint($b.attr("data-plano").split("-")[1]);
+			this.ir_para(ano, $b.attr("data-mes"), `tr[data-name="${$b.attr("data-linha")}"]`);
+		});
+	}
+
+	// ------------------------------------------------------------------
 	// Despesas Recorrentes
 	// ------------------------------------------------------------------
 
@@ -1350,6 +1558,13 @@ function url_link(coluna, valor) {
 	return valor ? `/app/${frappe.router.slug(coluna.doctype)}/${encodeURIComponent(valor)}` : "#";
 }
 
+// Same rule as entre_erp.caixa.e_linha_de_caixa
+function e_linha_de_caixa(row) {
+	if (row.despesa_recorrente === "Caixa") return true;
+	const texto = (row.descricao || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+	return texto.startsWith("caixa");
+}
+
 function data_utilizador(iso) {
 	return iso ? frappe.datetime.str_to_user(iso) : "";
 }
@@ -1488,6 +1703,19 @@ function inject_styles() {
 		.cf-grelha tbody tr.cf-selecionada > td { background: rgba(59, 130, 246, 0.1); }
 		.cf-cell.cf-data::placeholder { color: var(--text-muted); opacity: 0.6; }
 		.cf-link-wrap { display: flex; align-items: center; }
+		.cf-salto-caixa, .cf-salto-plano {
+			font-size: 11px; padding: 1px 7px; margin-left: 4px; border-radius: 10px; white-space: nowrap;
+			border: 1px solid var(--cf-linha); background: var(--control-bg); color: var(--text-muted);
+		}
+		.cf-salto-caixa:hover, .cf-salto-plano:hover { color: var(--primary); border-color: var(--primary); }
+		.cf-caixa-topo { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+		.cf-caixa-mes { font-size: 15px; font-weight: 600; min-width: 130px; text-align: center; }
+		.cf-caixa-topo .cf-ajuda { margin: 0; font-size: 12px; }
+		.cf-kpis.cf-kpis-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+		.cf-vermelho { color: var(--cf-vermelho) !important; }
+		.cf-reforco > td:first-child { box-shadow: inset 3px 0 0 var(--cf-verde) !important; }
+		.cf-reforco [data-campo="tipo"], .cf-reforco [data-campo="valor"] { color: var(--cf-verde); font-weight: 600; }
+		.cf-saldo { padding: 0 8px !important; font-variant-numeric: tabular-nums; font-weight: 600; }
 		.cf-link-abrir { padding: 0 8px; color: var(--text-muted); text-decoration: none !important; }
 		.cf-link-abrir:hover { color: var(--primary); }
 		.cf-link-menu { width: 320px; max-height: 300px; overflow-y: auto; padding: 4px 0; }
@@ -1583,7 +1811,7 @@ function inject_styles() {
 		.cf-ponto-pendente { background: var(--cf-laranja); }
 
 		@media (max-width: 768px) {
-			.cf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+			.cf-kpis, .cf-kpis.cf-kpis-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 			.cf-kpi-valor { font-size: 16px; }
 			.cf-grelha-wrap { max-height: none; }
 		}
