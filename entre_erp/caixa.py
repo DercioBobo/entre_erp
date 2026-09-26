@@ -12,25 +12,24 @@ for the next one.
 
 import calendar
 import datetime
-import unicodedata
 
 import frappe
 from frappe import _
 from frappe.utils import flt, getdate
 
-from entre_erp.pagamentos import ESTADO_PAGO, ESTADO_PARCIAL, MESES, numero_mes
-
-DESPESA_CAIXA = "Caixa"
+from entre_erp.pagamentos import (
+	DESPESA_CAIXA,
+	ESTADO_PAGO,
+	ESTADO_PARCIAL,
+	MESES,
+	bloqueio_do_mes_anterior,
+	e_linha_de_caixa,
+	nome_plano,
+	numero_mes,
+)
 REFORCO = "Reforço"
 GASTO = "Gasto"
 CAMPOS_EDITAVEIS = {"data", "descricao", "tipo", "valor", "categoria", "observacoes"}
-
-
-def e_linha_de_caixa(row):
-	if row.despesa_recorrente == DESPESA_CAIXA:
-		return True
-	texto = unicodedata.normalize("NFKD", row.descricao or "").encode("ascii", "ignore").decode().lower()
-	return texto.strip().startswith("caixa")
 
 
 # ----------------------------------------------------------------------
@@ -120,7 +119,69 @@ def obter_caixa(ano, mes):
 		fields=["name", "data", "tipo", "descricao", "valor", "categoria", "observacoes", "plano", "linha_plano"],
 		order_by="data asc, creation asc",
 	)
-	return {"ano": ano, "mes": mes, "movimentos": movimentos, "resumo": resumo(ano, mes)}
+	return {
+		"ano": ano,
+		"mes": mes,
+		"movimentos": movimentos,
+		"resumo": resumo(ano, mes),
+		"reforco_do_mes": reforco_do_mes(ano, mes),
+	}
+
+
+def reforco_do_mes(ano, mes):
+	"""The month's plan Caixa line, as the Caixa tab shows and edits it."""
+	nome = nome_plano("Mensal", ano, mes)
+	plano = frappe.db.get_value("Plano de Pagamentos", nome, ["name", "estado", "titulo"], as_dict=True)
+	if not plano:
+		return {"plano": None}
+	bloqueio = bloqueio_do_mes_anterior(ano, mes) if plano.estado != "Fechado" else None
+	linha = next(
+		(
+			r
+			for r in frappe.get_all(
+				"Linha do Plano de Pagamentos",
+				filters={"parent": nome, "parenttype": "Plano de Pagamentos"},
+				fields=["name", "descricao", "despesa_recorrente", "valor", "valor_pago", "estado", "data_pagamento"],
+				order_by="idx asc",
+			)
+			if e_linha_de_caixa(r)
+		),
+		None,
+	)
+	return {
+		"plano": plano.name,
+		"titulo": plano.titulo,
+		"estado_plano": plano.estado,
+		"bloqueio": bloqueio,
+		"editavel": plano.estado != "Fechado" and not bloqueio,
+		"linha": linha,
+	}
+
+
+@frappe.whitelist()
+def adicionar_linha_caixa(ano, mes):
+	"""Adds a Caixa line (amount 0 = no top-up yet) to the month's plan."""
+	from entre_erp.pagamentos import _plano_editavel
+
+	doc = _plano_editavel(nome_plano("Mensal", int(ano), mes))
+	if not any(e_linha_de_caixa(r) for r in doc.linhas):
+		recorrente = frappe.db.get_value(
+			"Despesa Recorrente", DESPESA_CAIXA, ["categoria", "metodo_pagamento", "prioridade"], as_dict=True
+		)
+		doc.append(
+			"linhas",
+			{
+				"descricao": DESPESA_CAIXA,
+				"despesa_recorrente": DESPESA_CAIXA if recorrente else None,
+				"categoria": recorrente.categoria if recorrente else None,
+				"metodo_pagamento": recorrente.metodo_pagamento if recorrente else None,
+				"prioridade": recorrente.prioridade if recorrente else None,
+				"valor": 0,
+				"estado": "Pendente",
+			},
+		)
+		doc.save()
+	return obter_caixa(ano, mes)
 
 
 @frappe.whitelist()

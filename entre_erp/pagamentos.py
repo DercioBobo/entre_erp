@@ -1,5 +1,7 @@
 """Shared helpers for the Plano de Pagamentos (monthly cashflow planning)."""
 
+import unicodedata
+
 import frappe
 from frappe import _
 from frappe.utils import flt
@@ -28,6 +30,26 @@ ESTADO_CANCELADO = "Cancelado"
 ESTADOS_FORA_DO_MES = (ESTADO_PROXIMO_MES, ESTADO_CANCELADO)
 # A line is settled ("liquidada") once it needs nothing more this month.
 ESTADOS_LIQUIDADOS = (ESTADO_PAGO, ESTADO_CANCELADO, ESTADO_PROXIMO_MES)
+
+
+DESPESA_CAIXA = "Caixa"
+
+
+def e_linha_de_caixa(row):
+	"""The plan's Caixa line: the month's top-up for the Caixa (petty cash)."""
+	if row.get("despesa_recorrente") == DESPESA_CAIXA:
+		return True
+	texto = unicodedata.normalize("NFKD", row.get("descricao") or "").encode("ascii", "ignore").decode()
+	return texto.strip().lower().startswith("caixa")
+
+
+def linha_por_liquidar(row):
+	"""Still needs something this month. A Caixa line at 0 means "no top-up
+	this month" (the Caixa keeps its leftover), so it doesn't hold the month
+	open."""
+	if row.get("estado") in ESTADOS_LIQUIDADOS:
+		return False
+	return not (e_linha_de_caixa(row) and not flt(row.get("valor")))
 
 
 def numero_mes(mes):
@@ -84,16 +106,19 @@ def bloqueio_do_mes_anterior(ano, mes):
 	if not anterior or anterior.estado == "Fechado":
 		return None
 
-	pendentes, valor = frappe.db.sql(
-		"""
-		select count(*), coalesce(sum(greatest(valor - valor_pago, 0)), 0)
-		from `tabLinha do Plano de Pagamentos`
-		where parent = %s and parenttype = 'Plano de Pagamentos' and estado not in %s
-		""",
-		(nome, ESTADOS_LIQUIDADOS),
-	)[0]
-	if not pendentes:
+	por_liquidar = [
+		r
+		for r in frappe.get_all(
+			"Linha do Plano de Pagamentos",
+			filters={"parent": nome, "parenttype": "Plano de Pagamentos"},
+			fields=["estado", "valor", "valor_pago", "descricao", "despesa_recorrente"],
+		)
+		if linha_por_liquidar(r)
+	]
+	if not por_liquidar:
 		return None
+	pendentes = len(por_liquidar)
+	valor = sum(max(flt(r.valor) - flt(r.valor_pago), 0) for r in por_liquidar)
 	return {
 		"plano": nome,
 		"titulo": anterior.titulo,
@@ -148,6 +173,7 @@ CAMPOS_EDITAVEIS = {
 	"prioridade",
 	"estado",
 	"valor_pago",
+	"data_pretendida",
 	"data_pagamento",
 	"metodo_pagamento",
 	"categoria",
@@ -181,6 +207,7 @@ def obter_plano(plano):
 	resultado = doc.as_dict()
 	if doc.tipo == "Mensal" and doc.estado != "Fechado":
 		resultado["bloqueio"] = bloqueio_do_mes_anterior(doc.ano, doc.mes)
+	resultado["caixa"] = resumo_caixa_do_plano(doc)
 	return resultado
 
 
@@ -333,8 +360,91 @@ def _resposta_completa(doc):
 	return {"plano": doc.as_dict(), "cabecalho": _cabecalho(doc), "transporte": doc.flags.transporte}
 
 
+@frappe.whitelist()
+def obter_detalhes_linha(plano, linha):
+	"""Everything the side panel shows about one line: the line itself, the
+	linked Purchase Invoice as ERPNext sees it now, where the line moved to
+	/ came from, its Caixa top-up and its change history."""
+	doc = frappe.get_doc("Plano de Pagamentos", plano)
+	doc.check_permission("read")
+	row = _linha(doc, linha)
+	return {
+		"linha": row.as_dict(),
+		"factura": _factura_info(row.factura),
+		"origem": _linha_noutro_plano(row.linha_origem) if row.linha_origem else None,
+		"destino": _linha_noutro_plano(
+			frappe.db.get_value(
+				"Linha do Plano de Pagamentos", {"linha_origem": row.name, "parenttype": "Plano de Pagamentos"}, "name"
+			)
+		),
+		"caixa": frappe.db.get_value(
+			"Movimento de Caixa", {"linha_plano": row.name}, ["name", "valor", "data"], as_dict=True
+		),
+		"historico": _historico_da_linha(doc.name, row.name),
+		"resumo_caixa": resumo_caixa_do_plano(doc) if e_linha_de_caixa(row) else None,
+	}
+
+
+def _factura_info(factura):
+	if not factura or not frappe.has_permission("Purchase Invoice", "read"):
+		return None
+	return frappe.db.get_value(
+		"Purchase Invoice",
+		factura,
+		["name", "supplier_name", "posting_date", "due_date", "base_grand_total", "outstanding_amount", "status", "docstatus"],
+		as_dict=True,
+	)
+
+
+def _linha_noutro_plano(nome_linha):
+	if not nome_linha:
+		return None
+	linha = frappe.db.get_value(
+		"Linha do Plano de Pagamentos", nome_linha, ["name", "parent", "estado", "valor"], as_dict=True
+	)
+	if not linha:
+		return None
+	plano = frappe.db.get_value("Plano de Pagamentos", linha.parent, ["ano", "mes", "titulo"], as_dict=True)
+	return {**linha, **(plano or {})}
+
+
+def _historico_da_linha(plano, linha, limite=30):
+	"""Read from Frappe's own change log (Version) of the plan: the entries
+	that touched this row, newest first."""
+	meta = frappe.get_meta("Linha do Plano de Pagamentos")
+	rotulo = lambda campo: meta.get_label(campo) or campo  # noqa: E731
+	historico = []
+	for versao in frappe.get_all(
+		"Version",
+		filters={"ref_doctype": "Plano de Pagamentos", "docname": plano},
+		fields=["owner", "creation", "data"],
+		order_by="creation desc",
+		limit=200,
+	):
+		dados = frappe.parse_json(versao.data or "{}")
+		for tabela, _idx, nome, mudancas in dados.get("row_changed") or []:
+			if tabela == "linhas" and nome == linha:
+				for campo, antes, depois in mudancas:
+					historico.append(
+						{
+							"quando": versao.creation,
+							"quem": versao.owner,
+							"campo": rotulo(campo),
+							"antes": antes,
+							"depois": depois,
+						}
+					)
+		for tabela, dados_linha in dados.get("added") or []:
+			if tabela == "linhas" and (dados_linha or {}).get("name") == linha:
+				historico.append({"quando": versao.creation, "quem": versao.owner, "criada": True})
+		if len(historico) >= limite:
+			break
+	return historico[:limite]
+
+
 def _plano_editavel(plano):
 	doc = frappe.get_doc("Plano de Pagamentos", plano)
+	doc.check_permission("write")
 	if doc.estado == "Fechado":
 		frappe.throw(_("O plano {0} está Fechado. Reabra-o para editar.").format(doc.titulo))
 	return doc
@@ -356,4 +466,14 @@ def _cabecalho(doc):
 		"total_remanescente": doc.total_remanescente,
 		"resumo_metodos": [r.as_dict() for r in doc.resumo_metodos],
 		"fechado_automaticamente": bool(doc.flags.fechado_automaticamente),
+		"caixa": resumo_caixa_do_plano(doc),
 	}
+
+
+def resumo_caixa_do_plano(doc):
+	"""Caixa balance for a monthly plan that has a Caixa line (shown on that line)."""
+	if doc.tipo != "Mensal" or not any(e_linha_de_caixa(r) for r in doc.linhas):
+		return None
+	from entre_erp.caixa import resumo  # caixa imports this module
+
+	return resumo(doc.ano, doc.mes)

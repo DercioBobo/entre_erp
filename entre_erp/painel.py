@@ -15,10 +15,10 @@ from frappe.utils import flt, getdate
 
 from entre_erp import caixa
 from entre_erp.pagamentos import (
-	ESTADO_PAGO,
 	ESTADOS_FORA_DO_MES,
 	MESES,
 	bloqueio_do_mes_anterior,
+	linha_por_liquidar,
 	nome_plano,
 )
 
@@ -215,13 +215,16 @@ def _mes_atual(ano, planos):
 	plano = planos.get(mes)
 	resultado = {"mes": mes, "existe": bool(plano)}
 	if plano:
-		por_liquidar = frappe.db.count(
-			"Linha do Plano de Pagamentos",
-			{
-				"parent": plano.name,
-				"parenttype": "Plano de Pagamentos",
-				"estado": ["not in", (ESTADO_PAGO, *ESTADOS_FORA_DO_MES)],
-			},
+		por_liquidar = len(
+			[
+				r
+				for r in frappe.get_all(
+					"Linha do Plano de Pagamentos",
+					filters={"parent": plano.name, "parenttype": "Plano de Pagamentos"},
+					fields=["estado", "valor", "descricao", "despesa_recorrente"],
+				)
+				if linha_por_liquidar(r)
+			]
 		)
 		resultado.update(
 			{

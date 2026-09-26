@@ -17,10 +17,10 @@ from frappe.utils import getdate
 
 from entre_erp.install import create_categorias_de_despesa
 from entre_erp.pagamentos import (
-	ESTADOS_LIQUIDADOS,
 	MESES,
 	factura_existe,
 	factura_para_observacoes,
+	linha_por_liquidar,
 	nome_plano,
 	numero_mes,
 )
@@ -333,7 +333,7 @@ def _estado_do_plano(plano, ano):
 	if periodo < atual:
 		# Only settled months can be Fechado; a past month with lines still
 		# to settle stays open (and keeps the next month locked).
-		liquidado = all(l["estado"] in ESTADOS_LIQUIDADOS for l in plano["linhas"])
+		liquidado = not any(linha_por_liquidar(l) for l in plano["linhas"])
 		return "Fechado" if liquidado else "Em Curso"
 	return "Em Curso" if periodo == atual else "Rascunho"
 

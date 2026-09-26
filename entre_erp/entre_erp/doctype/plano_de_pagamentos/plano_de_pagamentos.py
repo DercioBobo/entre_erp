@@ -9,8 +9,8 @@ from entre_erp.pagamentos import (
 	ESTADO_PARCIAL,
 	ESTADO_PROXIMO_MES,
 	ESTADOS_FORA_DO_MES,
-	ESTADOS_LIQUIDADOS,
 	bloqueio_do_mes_anterior,
+	linha_por_liquidar,
 	mes_anterior,
 	mes_seguinte,
 	nome_plano,
@@ -118,7 +118,7 @@ class PlanodePagamentos(Document):
 	# ------------------------------------------------------------------
 
 	def _linhas_por_liquidar(self, linhas=None):
-		return [r for r in (self.linhas if linhas is None else linhas) if r.estado not in ESTADOS_LIQUIDADOS]
+		return [r for r in (self.linhas if linhas is None else linhas) if linha_por_liquidar(r)]
 
 	def _validar_mes_anterior_liquidado(self):
 		if self.tipo != "Mensal" or self.flags.ignorar_bloqueio:

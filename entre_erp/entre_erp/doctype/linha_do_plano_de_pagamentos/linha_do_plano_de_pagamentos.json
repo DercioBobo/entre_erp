@@ -8,6 +8,7 @@
   "valor",
   "prioridade",
   "estado",
+  "data_pretendida",
   "valor_pago",
   "data_pagamento",
   "metodo_pagamento",
@@ -55,6 +56,15 @@
    "in_list_view": 1,
    "columns": 1,
    "description": "Cancelado: não se paga este mês — a linha fica no plano mas não conta nos totais."
+  },
+  {
+   "fieldname": "data_pretendida",
+   "fieldtype": "Date",
+   "label": "Data pretendida",
+   "in_list_view": 1,
+   "columns": 1,
+   "no_copy": 1,
+   "description": "Até quando o operador quer que este pagamento esteja feito."
   },
   {
    "fieldname": "valor_pago",

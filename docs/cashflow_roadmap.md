@@ -21,7 +21,9 @@ _Last updated: 2026-09-26_
 | Bulk actions | Select rows → Marcar como Pago, Estado, Método, Categoria, Prior., Pago em…, Remover — all in a single save |
 | Payment date | **Pago em** — today's date when a line becomes Pago (editable); column hidden by default, "-" when empty |
 | Factura → ERPNext | Factura is a link to **Purchase Invoice**: search as you type, ↗ opens it, fills the supplier (and the amount if empty); invalid or cancelled numbers are kept in Observações |
-| Caixa (petty cash) | 💰 **Caixa** tab: its own running balance; top-ups come automatically when the plan's Caixa line is paid (and leave if undone); the operator records each spend with date, category and amount; leftover carries over; card on the Painel |
+| Caixa (petty cash) | 💰 **Caixa** tab: its own running balance; top-ups come automatically when the plan's Caixa line is paid (and leave if undone); the operator records each spend with date, category and amount; leftover carries over; card on the Painel. The plan's Caixa line **is** the month's top-up: edit it from the Caixa tab ("Reforço de …" box) or the plan; the line shows the Caixa balance (💰) and its side panel the month's Caixa summary; a Caixa line at **0** = no top-up and doesn't keep the month open |
+| Line side panel | **›** on each row (or double-click the row number): all fields incl. Fornecedor / Ordem de Compra, live Purchase Invoice card, links (Próximo Mês, Caixa), change history; ↑ / ↓ to move between lines, Esc to close |
+| Data pretendida | Date by which the operator wants the payment done; red when past and not settled; **Em atraso** toggle with count; in the side panel and as a bulk action; not carried to the next month |
 | Hide columns | **Colunas ▾** menu to show / hide any column except Descrição; remembered per browser |
 | Monthly job | On the 1st, the month's plan is created with the recurring bills and the Próximo Mês lines |
 | Painel Financeiro | Manager page (`/app/painel-financeiro`): money in from ERPNext (invoices / payments received) against money out from the plans; cards, chart, month-by-month table with running balance, spending by category, top clients to receive; clicking a month opens it in Cashflow |
@@ -68,6 +70,7 @@ _Last updated: 2026-09-26_
 - [ ] **Print / PDF / Excel export** of a month, for management
 - [ ] **Reminder on the 1st** — email / notification about unsettled lines and locked months
 - [ ] **Salários, INSS, IRPS (and maybe IVA) from ERPNext** — each Despesa Recorrente gets a "Fonte" (Manual / ERPNext); amounts come from submitted Salary Slips (net pay; INSS and IRPS deductions, plus the employer's 4% INSS) and update by themselves when payroll is submitted or cancelled. Salários land in the payroll month, INSS / IRPS in the **next** month. Shows "estimativa" until payroll runs; never changes a line already Pago. _Open questions: is payroll run in ERPNext? component names? is employer INSS set up? what are INSS-DH / IRPS-DH (another company)? include IVA?_
+- [ ] **Caixa: side panel** — the same details panel for Caixa movements (history, notes)
 - [ ] **Caixa: counting the cash** — the operator types the cash in hand; a difference is recorded as an adjustment so the Caixa matches reality
 - [ ] **Caixa: split by category on the Painel** — in "Saídas por categoria", replace the single Caixa line by what the Caixa money was actually spent on
 - [ ] **Change history per line** — who changed the amount or status, and when (Frappe already records it; just show it on the row)
