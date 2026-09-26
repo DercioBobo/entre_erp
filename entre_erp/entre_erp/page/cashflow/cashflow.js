@@ -6,7 +6,13 @@ frappe.pages["cashflow"].on_page_load = function (wrapper) {
 	});
 	$(wrapper).addClass("cf-wrapper");
 
-	new CashflowSheet(page);
+	wrapper.cashflow = new CashflowSheet(page);
+};
+
+// Pages are kept alive between visits, so a link from the Painel Financeiro
+// (frappe.route_options = { ano, mes }) is picked up here on every show.
+frappe.pages["cashflow"].on_page_show = function (wrapper) {
+	if (wrapper.cashflow) wrapper.cashflow.abrir_de_route_options();
 };
 
 const API = "entre_erp.pagamentos.";
@@ -55,10 +61,9 @@ const COLUNAS_PLANO = [
 	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, filtro: true, opcoes: () => ESTADOS },
 	{ campo: "valor_pago", label: "Valor Pago", tipo: "num", largura: 120 },
 	{ campo: "data_pagamento", label: "Pago em", tipo: "date", largura: 140 },
-	{ campo: "pago_por", label: "Pago por", tipo: "user", largura: 150, so_leitura: true },
 	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 110, filtro: true, opcoes: (s) => [""].concat(s.metodos) },
 	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, filtro: true, opcoes: (s) => [""].concat(s.categorias) },
-	{ campo: "factura", label: "Factura", tipo: "text", largura: 150 },
+	{ campo: "factura", label: "Factura", tipo: "link", doctype: "Purchase Invoice", largura: 190 },
 	{ campo: "observacoes", label: "Observações", tipo: "text", largura: 300 },
 ];
 
@@ -98,14 +103,17 @@ const curto = (mes) => MESES_CURTOS[MESES.indexOf(mes)];
 class CashflowSheet {
 	constructor(page) {
 		this.page = page;
-		this.ano = new Date().getFullYear();
-		this.aba = MESES[new Date().getMonth()];
+		const destino = frappe.route_options || {};
+		frappe.route_options = null;
+		this.ano = cint(destino.ano) || new Date().getFullYear();
+		this.aba = MESES.includes(destino.mes) ? destino.mes : MESES[new Date().getMonth()];
 		this.planos = {};
 		this.metodos = [];
 		this.categorias = [];
 		this.doc = null;
 		this.fila = Promise.resolve();
 		this.selecionadas = new Set(); // row names ticked for a bulk action
+		this.ocultas = ler_colunas_ocultas();
 		// Header filters { campo: Set of values }, kept while switching months
 		// so you can follow e.g. only STB across the year.
 		this.filtros = {};
@@ -148,6 +156,20 @@ class CashflowSheet {
 		this.carregar_ano();
 	}
 
+	abrir_de_route_options() {
+		const destino = frappe.route_options;
+		if (!destino || !MESES.includes(destino.mes)) return;
+		frappe.route_options = null;
+		this.aba = destino.mes;
+		if (cint(destino.ano) && cint(destino.ano) !== this.ano) {
+			this.ano = cint(destino.ano);
+			this.carregar_ano();
+		} else {
+			this.render_abas();
+			this.abrir_aba(destino.mes);
+		}
+	}
+
 	carregar_ano() {
 		this.$body.find(".cf-ano-valor").text(this.ano);
 		this.page.set_title(__("Cashflow {0}", [this.ano]));
@@ -184,6 +206,7 @@ class CashflowSheet {
 
 	abrir_aba(aba) {
 		this.fechar_menu_filtro();
+		this.fechar_menu_link();
 		this.aba = aba;
 		this.doc = null;
 		this.$body.find(".cf-aba").removeClass("active").filter(`[data-aba="${aba}"]`).addClass("active");
@@ -242,19 +265,9 @@ class CashflowSheet {
 			<select class="form-control input-sm cf-estado-plano" title="${__("Estado do Plano")}" ${bloqueio ? "disabled" : ""}>
 				${ESTADOS_PLANO.map((e) => `<option ${e === doc.estado ? "selected" : ""}>${e}</option>`).join("")}
 			</select>
-			<div class="btn-group">
-				<button class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" ${so_leitura ? "disabled" : ""}>
-					${__("Preencher")} <span class="caret"></span>
-				</button>
-				<ul class="dropdown-menu dropdown-menu-right">
-					<li><a class="dropdown-item cf-preencher" data-acao="recorrentes">${__("Copiar Despesas Recorrentes")}</a></li>
-					${
-						doc.tipo === "Mensal"
-							? `<li><a class="dropdown-item cf-preencher" data-acao="proximo_mes">${__("Transportar Próximo Mês do mês anterior")}</a></li>`
-							: ""
-					}
-				</ul>
-			</div>
+			<button class="btn btn-default btn-sm cf-preencher" data-acao="recorrentes" ${so_leitura ? "disabled" : ""}>
+				${__("Copiar Despesas Recorrentes")}
+			</button>
 			<button class="btn btn-default btn-sm cf-abrir-form">${__("Formulário")}</button>
 		`);
 
@@ -279,16 +292,30 @@ class CashflowSheet {
 				<button class="btn btn-default btn-sm cf-por-pagar" title="${__("Só o que falta pagar")}">${__("Por pagar")}</button>
 				<button class="btn btn-link btn-sm cf-limpar-filtros">✕ ${__("Limpar filtros")}</button>
 				<span class="cf-contagem text-muted"></span>
+				<div class="btn-group cf-colunas">
+					<button class="btn btn-default btn-sm dropdown-toggle cf-colunas-btn" data-toggle="dropdown"></button>
+					<div class="dropdown-menu dropdown-menu-right cf-colunas-menu">
+						${COLUNAS_PLANO.filter((c) => !c.fixa)
+							.map(
+								(c) => `<label class="cf-filtro-op">
+									<input type="checkbox" class="cf-coluna-check" value="${c.campo}" ${this.ocultas.has(c.campo) ? "" : "checked"}>
+									${__(c.label)}
+								</label>`,
+							)
+							.join("")}
+						<div class="cf-filtro-rodape"><button class="btn btn-xs btn-default cf-colunas-todas">${__("Mostrar todas")}</button></div>
+					</div>
+				</div>
 			</div>
 			<div class="cf-lote"></div>
 			<div class="cf-grelha-wrap">
-				<table class="cf-grelha">
+				<table class="cf-grelha ${[...this.ocultas].map((c) => `cf-sem-${c}`).join(" ")}">
 					<thead><tr>
 						<th class="cf-idx">${
 							so_leitura ? "#" : `<input type="checkbox" class="cf-sel-todas" title="${__("Selecionar as linhas visíveis")}">`
 						}</th>
 						${COLUNAS_PLANO.map(
-							(c) => `<th class="${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}${
+							(c) => `<th class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""} ${c.tipo === "num" ? "cf-num" : ""}" style="min-width:${c.largura}px">${__(c.label)}${
 								c.filtro
 									? `<button class="cf-filtro-btn" data-campo="${c.campo}" title="${__("Filtrar")}">${ICONE_FILTRO}</button>`
 									: ""
@@ -301,13 +328,18 @@ class CashflowSheet {
 						${
 							so_leitura
 								? ""
-								: `<tr class="cf-nova"><td class="cf-idx">+</td><td class="cf-fixa" colspan="1">
-									<input class="cf-cell cf-nova-input" placeholder="${__("Nova despesa… (Enter)")}"></td>
-									<td colspan="${COLUNAS_PLANO.length}"></td></tr>`
+								: `<tr class="cf-nova"><td class="cf-idx">+</td>${COLUNAS_PLANO.map((c) =>
+										c.fixa
+											? `<td class="cf-col-${c.campo} cf-fixa"><input class="cf-cell cf-nova-input" placeholder="${__("Nova despesa… (Enter)")}"></td>`
+											: `<td class="cf-col-${c.campo}"></td>`,
+									).join("")}<td></td></tr>`
 						}
-						<tr class="cf-total"><td></td><td class="cf-fixa cf-total-label">${__("TOTAL")}</td>
-							<td class="cf-num cf-total-valor"></td><td></td><td></td>
-							<td class="cf-num cf-total-pago"></td><td colspan="${COLUNAS_PLANO.length - 4}"></td></tr>
+						<tr class="cf-total"><td></td>${COLUNAS_PLANO.map((c) => {
+							if (c.fixa) return `<td class="cf-col-${c.campo} cf-fixa cf-total-label">${__("TOTAL")}</td>`;
+							if (c.campo === "valor") return `<td class="cf-col-valor cf-num cf-total-valor"></td>`;
+							if (c.campo === "valor_pago") return `<td class="cf-col-valor_pago cf-num cf-total-pago"></td>`;
+							return `<td class="cf-col-${c.campo}"></td>`;
+						}).join("")}<td></td></tr>
 					</tfoot>
 				</table>
 			</div>
@@ -322,7 +354,7 @@ class CashflowSheet {
 		return `
 			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"}">
 				<td class="cf-idx"><span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
-				${COLUNAS_PLANO.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura)}</td>`).join("")}
+				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura)}</td>`).join("")}
 				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
 			</tr>`;
 	}
@@ -404,6 +436,11 @@ class CashflowSheet {
 			);
 		});
 
+		$c.on("focus input", "tbody .cf-cell-link", (e) => this.buscar_link(e.currentTarget));
+		$c.on("keydown", "tbody .cf-cell-link", (e) => this.teclado_link(e));
+		$c.on("blur", "tbody .cf-cell-link", () => setTimeout(() => this.fechar_menu_link(), 150));
+		$c.find(".cf-grelha-wrap").on("scroll", () => this.fechar_menu_link());
+
 		$c.on("keydown", "tbody .cf-cell", (e) => {
 			if (e.key !== "Enter") return;
 			e.preventDefault();
@@ -414,6 +451,18 @@ class CashflowSheet {
 			($alvo.length ? $alvo : $(e.currentTarget)).trigger("focus").trigger("select");
 		});
 
+		$c.on("focus", "tbody .cf-data", (e) => {
+			const el = e.currentTarget;
+			if (el.disabled) return;
+			el.type = "date";
+			el.value = el.dataset.iso || "";
+		});
+		$c.on("blur", "tbody .cf-data", (e) => {
+			const el = e.currentTarget;
+			if (el.type === "date") el.dataset.iso = el.value;
+			el.type = "text";
+			el.value = data_utilizador(el.dataset.iso);
+		});
 		$c.on("blur", "tbody .cf-dinheiro", (e) => {
 			const $el = $(e.currentTarget);
 			const v = flt($el.val());
@@ -509,6 +558,18 @@ class CashflowSheet {
 			this.atualizar_barra_lote();
 		});
 
+		$c.on("click", ".cf-colunas-menu", (e) => e.stopPropagation()); // keep open while ticking
+		$c.on("change", ".cf-coluna-check", (e) => {
+			if (e.currentTarget.checked) this.ocultas.delete(e.currentTarget.value);
+			else this.ocultas.add(e.currentTarget.value);
+			this.aplicar_colunas();
+		});
+		$c.on("click", ".cf-colunas-todas", () => {
+			this.ocultas.clear();
+			$c.find(".cf-coluna-check").prop("checked", true);
+			this.aplicar_colunas();
+		});
+
 		$c.on("input", ".cf-pesquisa", (e) => {
 			this.pesquisa = $(e.currentTarget).val();
 			this.aplicar_filtros();
@@ -554,7 +615,99 @@ class CashflowSheet {
 		});
 		$acoes.find(".cf-abrir-form").on("click", () => frappe.set_route("Form", "Plano de Pagamentos", this.doc.name));
 
+		this.aplicar_colunas();
 		this.aplicar_filtros();
+	}
+
+	aplicar_colunas() {
+		const $grelha = this.$conteudo.find(".cf-grelha");
+		COLUNAS_PLANO.forEach((c) => $grelha.toggleClass(`cf-sem-${c.campo}`, this.ocultas.has(c.campo)));
+		const n = this.ocultas.size;
+		this.$conteudo
+			.find(".cf-colunas-btn")
+			.html(`${__("Colunas")}${n ? ` <span class="cf-colunas-n">${__("{0} ocultas", [n])}</span>` : ""} <span class="caret"></span>`);
+		guardar_colunas_ocultas(this.ocultas);
+	}
+
+	// ------------------------------------------------------------------
+	// Link cells (Factura → Purchase Invoice): search as you type
+	// ------------------------------------------------------------------
+
+	buscar_link(input) {
+		clearTimeout(this.link_timer);
+		this.link_timer = setTimeout(() => {
+			const coluna = COLUNAS_PLANO.find((c) => c.campo === input.getAttribute("data-campo"));
+			frappe.call({
+				method: "frappe.desk.search.search_link",
+				args: {
+					doctype: coluna.doctype,
+					txt: input.value,
+					filters: { docstatus: ["!=", 2] },
+					page_length: 15,
+				},
+				callback: (r) => {
+					if (document.activeElement !== input) return;
+					this.mostrar_menu_link(input, r.message || r.results || []);
+				},
+			});
+		}, 250);
+	}
+
+	mostrar_menu_link(input, resultados) {
+		this.fechar_menu_link();
+		const $menu = $(`
+			<div class="cf-filtro-menu cf-link-menu">
+				${
+					resultados.length
+						? resultados
+								.map(
+									(r, i) => `<div class="cf-link-op ${i === 0 ? "ativo" : ""}" data-valor="${esc(r.value)}">
+										<b>${esc(r.value)}</b>
+										${r.description ? `<div class="cf-link-desc">${esc($("<div>").html(r.description).text())}</div>` : ""}
+									</div>`,
+								)
+								.join("")
+						: `<div class="cf-link-vazio">${__("Nenhuma factura encontrada.")}</div>`
+				}
+			</div>
+		`).appendTo(document.body);
+
+		const r = input.getBoundingClientRect();
+		$menu.css({ top: r.bottom + 2, left: Math.max(8, Math.min(r.left, window.innerWidth - 330)) });
+		// mousedown (not click) so the input doesn't lose focus first
+		$menu.on("mousedown", ".cf-link-op", (e) => {
+			e.preventDefault();
+			this.escolher_link(input, e.currentTarget.getAttribute("data-valor"));
+		});
+		this.$menu_link = $menu;
+	}
+
+	teclado_link(e) {
+		if (!this.$menu_link) return;
+		const $ops = this.$menu_link.find(".cf-link-op");
+		let i = $ops.index($ops.filter(".ativo"));
+		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+			e.preventDefault();
+			i = Math.max(0, Math.min($ops.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+			$ops.removeClass("ativo").eq(i).addClass("ativo")[0].scrollIntoView({ block: "nearest" });
+		} else if (e.key === "Enter" && $ops.length) {
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			this.escolher_link(e.currentTarget, $ops.eq(Math.max(i, 0)).attr("data-valor"));
+		} else if (e.key === "Escape") {
+			this.fechar_menu_link();
+		}
+	}
+
+	escolher_link(input, valor) {
+		input.value = valor;
+		this.fechar_menu_link();
+		input.blur(); // the browser's change event saves it, like any other cell
+	}
+
+	fechar_menu_link() {
+		if (this.$menu_link) this.$menu_link.remove();
+		this.$menu_link = null;
 	}
 
 	atualizar_linha_na_grelha($tr, linha) {
@@ -1136,9 +1289,12 @@ function html_celula(coluna, valor, sheet, desativado = false) {
 		case "int":
 			return `<input ${attrs} inputmode="numeric" value="${valor ? esc(valor) : ""}">`;
 		case "date":
-			return `<input ${attrs} type="date" value="${esc(valor || "")}">`;
-		case "user":
-			return `<span class="cf-cell cf-leitura" data-campo="${coluna.campo}">${esc(nome_utilizador(valor))}</span>`;
+			return `<input ${attrs.replace('class="cf-cell ', 'class="cf-cell cf-data ')} type="text" placeholder="-" data-iso="${esc(valor || "")}" value="${esc(data_utilizador(valor))}">`;
+		case "link":
+			return `<div class="cf-link-wrap">
+				<input ${attrs.replace('class="cf-cell ', 'class="cf-cell cf-cell-link ')} value="${esc(valor || "")}" autocomplete="off">
+				<a class="cf-link-abrir" href="${url_link(coluna, valor)}" target="_blank" rel="noopener" title="${__("Abrir no ERPNext")}" ${valor ? "" : 'style="display:none"'}>↗</a>
+			</div>`;
 		case "check":
 			return `<input type="checkbox" ${attrs.replace('class="cf-cell ', 'class="cf-cell cf-check ')} ${valor ? "checked" : ""}>`;
 		case "select": {
@@ -1157,18 +1313,58 @@ function html_celula(coluna, valor, sheet, desativado = false) {
 }
 
 function ler_celula(coluna, $el) {
+	if (coluna.tipo === "date") {
+		const el = $el[0];
+		if (el.type === "date") el.dataset.iso = el.value;
+		return el.dataset.iso || "";
+	}
 	if (coluna.tipo === "num") return flt($el.val());
 	if (coluna.tipo === "int") return cint($el.val());
 	if (coluna.tipo === "check") return $el.is(":checked") ? 1 : 0;
 	return $el.val();
 }
 
-function nome_utilizador(user) {
-	return user ? (frappe.user_info(user) || {}).fullname || user : "";
+// Hidden columns are a per-viewer preference, remembered in this browser.
+const CHAVE_COLUNAS = "entre_erp.cashflow.colunas_ocultas.v2";
+const COLUNAS_OCULTAS_POR_DEFEITO = ["data_pagamento"];
+
+function ler_colunas_ocultas() {
+	try {
+		const texto = localStorage.getItem(CHAVE_COLUNAS);
+		const guardadas = texto === null ? COLUNAS_OCULTAS_POR_DEFEITO : JSON.parse(texto);
+		return new Set(guardadas.filter((c) => COLUNAS_PLANO.some((col) => col.campo === c && !col.fixa)));
+	} catch (e) {
+		return new Set(COLUNAS_OCULTAS_POR_DEFEITO);
+	}
+}
+
+function guardar_colunas_ocultas(ocultas) {
+	try {
+		localStorage.setItem(CHAVE_COLUNAS, JSON.stringify([...ocultas]));
+	} catch (e) {
+		// private mode / storage blocked: just don't remember
+	}
+}
+
+function url_link(coluna, valor) {
+	return valor ? `/app/${frappe.router.slug(coluna.doctype)}/${encodeURIComponent(valor)}` : "#";
+}
+
+function data_utilizador(iso) {
+	return iso ? frappe.datetime.str_to_user(iso) : "";
 }
 
 function escrever_celula(coluna, $el, valor) {
-	if (coluna.tipo === "user") return $el.text(nome_utilizador(valor));
+	if (coluna.tipo === "date") {
+		$el[0].dataset.iso = valor || "";
+		$el.val(data_utilizador(valor));
+		return;
+	}
+	if (coluna.tipo === "link") {
+		$el.val(valor || "");
+		$el.siblings(".cf-link-abrir").attr("href", url_link(coluna, valor)).toggle(!!valor);
+		return;
+	}
 	if (coluna.tipo === "num") return $el.val(valor ? dinheiro(valor) : "");
 	if (coluna.tipo === "check") return $el.prop("checked", !!valor);
 	$el.val(valor == null ? "" : valor);
@@ -1243,6 +1439,10 @@ function inject_styles() {
 		.cf-filtros { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 		.cf-filtros .cf-pesquisa { max-width: 260px; }
 		.cf-limpar-filtros { color: var(--text-muted); }
+		.cf-colunas { margin-left: auto; }
+		.cf-colunas-menu { min-width: 200px; padding: 6px 0; }
+		.cf-colunas-n { font-size: 11px; color: var(--primary); }
+		${COLUNAS_PLANO.map((c) => `.cf-grelha.cf-sem-${c.campo} .cf-col-${c.campo} { display: none; }`).join("\n\t\t")}
 
 		.cf-filtro-btn {
 			border: 0; background: transparent; color: var(--text-muted); opacity: 0.55;
@@ -1286,7 +1486,15 @@ function inject_styles() {
 		.cf-grelha tbody tr:hover .cf-idx .cf-n:not(:only-child), .cf-selecionando .cf-idx .cf-n { display: none; }
 		.cf-idx .cf-sel-todas { margin: 0; vertical-align: middle; }
 		.cf-grelha tbody tr.cf-selecionada > td { background: rgba(59, 130, 246, 0.1); }
-		.cf-cell.cf-leitura { display: block; line-height: 20px; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+		.cf-cell.cf-data::placeholder { color: var(--text-muted); opacity: 0.6; }
+		.cf-link-wrap { display: flex; align-items: center; }
+		.cf-link-abrir { padding: 0 8px; color: var(--text-muted); text-decoration: none !important; }
+		.cf-link-abrir:hover { color: var(--primary); }
+		.cf-link-menu { width: 320px; max-height: 300px; overflow-y: auto; padding: 4px 0; }
+		.cf-link-op { padding: 6px 12px; cursor: pointer; }
+		.cf-link-op.ativo, .cf-link-op:hover { background: var(--control-bg); }
+		.cf-link-desc { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.cf-link-vazio { padding: 8px 12px; color: var(--text-muted); font-size: 12px; }
 
 		.cf-lote { display: none; }
 		.cf-lote.visivel {

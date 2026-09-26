@@ -2,19 +2,9 @@ frappe.ui.form.on("Plano de Pagamentos", {
 	refresh(frm) {
 		if (frm.is_new()) return;
 
-		frm.add_custom_button(
-			__("Copiar Despesas Recorrentes"),
-			() => run_and_report(frm, "copiar_despesas_recorrentes"),
-			__("Preencher"),
+		frm.add_custom_button(__("Copiar Despesas Recorrentes"), () =>
+			run_and_report(frm, "copiar_despesas_recorrentes"),
 		);
-
-		if (frm.doc.tipo === "Mensal") {
-			frm.add_custom_button(
-				__("Transportar Próximo Mês do Mês Anterior"),
-				() => run_and_report(frm, "transportar_do_mes_anterior"),
-				__("Preencher"),
-			);
-		}
 	},
 });
 

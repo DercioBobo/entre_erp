@@ -41,7 +41,11 @@ after_install = "entre_erp.install.after_install"
 # ---------------------------------------------------------------------------
 # Doc events
 # ---------------------------------------------------------------------------
-doc_events = {}
+doc_events = {
+    "Purchase Invoice": {
+        "on_cancel": "entre_erp.pagamentos.desligar_factura_cancelada",
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Scheduled tasks

@@ -104,6 +104,34 @@ def bloqueio_do_mes_anterior(ano, mes):
 	}
 
 
+def factura_existe(factura):
+	"""A Purchase Invoice that a line may link to (not cancelled)."""
+	return bool(frappe.db.exists("Purchase Invoice", {"name": factura, "docstatus": ["!=", 2]}))
+
+
+def factura_para_observacoes(factura, observacoes, motivo):
+	"""Keeps an unusable invoice number as text, so the reference isn't lost."""
+	nota = f"Factura: {factura} ({motivo})"
+	return f"{nota} · {observacoes}" if observacoes else nota
+
+
+def desligar_factura_cancelada(doc, method=None):
+	"""Purchase Invoice on_cancel: a plan line can't keep linking to a
+	cancelled invoice (Frappe would refuse to save that month again), so
+	the number moves to Observações and the link is cleared."""
+	for linha in frappe.get_all(
+		"Linha do Plano de Pagamentos",
+		filters={"factura": doc.name, "parenttype": "Plano de Pagamentos"},
+		fields=["name", "observacoes"],
+	):
+		frappe.db.set_value(
+			"Linha do Plano de Pagamentos",
+			linha.name,
+			{"factura": None, "observacoes": factura_para_observacoes(doc.name, linha.observacoes, "cancelada")},
+			update_modified=False,
+		)
+
+
 def valor_pago_da_linha(row):
 	if row.estado == ESTADO_PAGO and not flt(row.valor_pago):
 		return flt(row.valor)
@@ -219,8 +247,6 @@ def preencher_plano(plano, acao):
 	doc = _plano_editavel(plano)
 	if acao == "recorrentes":
 		n = doc.adicionar_despesas_recorrentes()
-	elif acao == "proximo_mes":
-		n = doc.adicionar_linhas_proximo_mes()
 	else:
 		frappe.throw(_("Ação desconhecida."))
 	doc.save()

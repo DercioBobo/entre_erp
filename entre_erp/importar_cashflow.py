@@ -16,7 +16,14 @@ import frappe
 from frappe.utils import getdate
 
 from entre_erp.install import create_categorias_de_despesa
-from entre_erp.pagamentos import ESTADOS_LIQUIDADOS, MESES, nome_plano, numero_mes
+from entre_erp.pagamentos import (
+	ESTADOS_LIQUIDADOS,
+	MESES,
+	factura_existe,
+	factura_para_observacoes,
+	nome_plano,
+	numero_mes,
+)
 
 METODOS_DE_PAGAMENTO = ["STB", "BIM", "BIM C"]
 
@@ -93,6 +100,7 @@ def importar(caminho, ano=2026, substituir=False, planos=None):
 		nome = nome_plano(plano["tipo"], ano, plano.get("mes"))
 		if planos is not None and nome not in planos:
 			continue
+		_resolver_facturas(plano)
 		if frappe.db.exists("Plano de Pagamentos", nome):
 			if not (substituir is True or (isinstance(substituir, (list, tuple)) and nome in substituir)):
 				resultado.append(f"{nome}: já existe, ignorado")
@@ -140,6 +148,7 @@ def pre_visualizar_ficheiro(file_url, ano):
 
 	resultado = []
 	for plano in ler_cashflow(_caminho_do_ficheiro(file_url), ano):
+		_resolver_facturas(plano)
 		doc = frappe.get_doc(
 			{
 				"doctype": "Plano de Pagamentos",
@@ -176,6 +185,20 @@ def importar_ficheiro(file_url, ano, planos, substituir=None):
 	return importar(
 		_caminho_do_ficheiro(file_url), ano, substituir=substituir, planos=frappe.parse_json(planos) or []
 	)
+
+
+def _resolver_facturas(plano):
+	"""Factura is a link to Purchase Invoice: numbers that don't exist in
+	ERPNext (or were cancelled) are kept in Observações instead."""
+	for linha in plano["linhas"]:
+		factura = linha.get("factura")
+		if not factura or factura_existe(factura):
+			continue
+		linha["observacoes"] = factura_para_observacoes(factura, linha.get("observacoes"), "não existe no ERPNext")
+		linha["factura"] = None
+		plano["avisos"].append(
+			f"{linha['descricao']}: factura {factura} não existe no ERPNext → guardada nas Observações"
+		)
 
 
 def _caminho_do_ficheiro(file_url):

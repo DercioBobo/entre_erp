@@ -44,14 +44,9 @@ class PlanodePagamentos(Document):
 		self.save()
 		return adicionadas
 
-	@frappe.whitelist()
-	def transportar_do_mes_anterior(self):
-		adicionadas = self.adicionar_linhas_proximo_mes()
-		self.save()
-		return adicionadas
-
 	# ------------------------------------------------------------------
-	# Also used by the monthly scheduler (entre_erp.pagamentos)
+	# Also used by the monthly scheduler and plan creation
+	# (entre_erp.pagamentos) and by the automatic Próximo Mês move
 	# ------------------------------------------------------------------
 
 	def adicionar_despesas_recorrentes(self):
@@ -274,25 +269,38 @@ class PlanodePagamentos(Document):
 		antes = self.get_doc_before_save()
 		estado_antes = {r.name: r.estado for r in (antes.linhas if antes else [])}
 		for row in self.linhas:
+			self._preencher_da_factura(row)
 			row.valor_pago = valor_pago_da_linha(row)
 			if row.despesa_recorrente and not row.categoria:
 				row.categoria = frappe.db.get_value("Despesa Recorrente", row.despesa_recorrente, "categoria")
 			self._registar_pagamento(row, estado_antes.get(row.name))
 
+	def _preencher_da_factura(self, row):
+		"""Supplier always follows the linked Purchase Invoice; the amount
+		only when the line has none yet (a plan may pay part of an invoice)."""
+		if not row.factura or (row.fornecedor and flt(row.valor)):
+			return
+		factura = frappe.db.get_value(
+			"Purchase Invoice", row.factura, ["supplier", "base_grand_total"], as_dict=True
+		)
+		if not factura:
+			return
+		row.fornecedor = row.fornecedor or factura.supplier
+		if not flt(row.valor):
+			row.valor = factura.base_grand_total
+
 	def _registar_pagamento(self, row, estado_antes):
-		"""Stamps "Pago em" (today, editable) and "Pago por" the moment a line
-		becomes Pago / Parcialmente Pago; clears them when it goes back to
+		"""Stamps "Pago em" with today (editable) the moment a line becomes
+		Pago / Parcialmente Pago; clears it when the line goes back to
 		unpaid. Imported lines keep an empty date — it isn't known."""
 		pagos = (ESTADO_PAGO, ESTADO_PARCIAL)
 		if row.estado not in pagos:
 			if not flt(row.valor_pago):
 				row.data_pagamento = None
-				row.pago_por = None
 			return
 		if estado_antes in pagos or self.flags.importacao:
 			return
 		row.data_pagamento = row.data_pagamento or frappe.utils.today()
-		row.pago_por = row.pago_por or frappe.session.user
 
 	def _calcular_totais(self):
 		"""Mirrors the spreadsheet: Previsto / Pago / Remanescente, plus the

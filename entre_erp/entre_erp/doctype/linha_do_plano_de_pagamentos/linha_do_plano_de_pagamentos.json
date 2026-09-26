@@ -10,7 +10,6 @@
   "estado",
   "valor_pago",
   "data_pagamento",
-  "pago_por",
   "metodo_pagamento",
   "column_break_1",
   "categoria",
@@ -73,14 +72,6 @@
    "description": "Preenchida automaticamente com a data de hoje quando a linha passa a Pago (pode ser corrigida)."
   },
   {
-   "fieldname": "pago_por",
-   "fieldtype": "Link",
-   "label": "Pago por",
-   "options": "User",
-   "no_copy": 1,
-   "read_only": 1
-  },
-  {
    "fieldname": "metodo_pagamento",
    "fieldtype": "Link",
    "label": "Método de Pagamento",
@@ -112,9 +103,10 @@
   },
   {
    "fieldname": "factura",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "label": "Factura",
-   "description": "Ex.: FT-FORN/26/010"
+   "description": "Factura de fornecedor (Purchase Invoice) no ERPNext. Ao escolher, preenche o Fornecedor e — se estiver vazio — o Valor.",
+   "options": "Purchase Invoice"
   },
   {
    "fieldname": "ordem_compra",
@@ -142,7 +134,7 @@
   }
  ],
  "links": [],
- "modified": "2026-09-25 00:00:00.000000",
+ "modified": "2026-09-26 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Linha do Plano de Pagamentos",
