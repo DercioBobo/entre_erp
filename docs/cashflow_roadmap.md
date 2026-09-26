@@ -24,6 +24,8 @@ _Last updated: 2026-09-26_
 | Caixa (petty cash) | 💰 **Caixa** tab: its own running balance; top-ups come automatically when the plan's Caixa line is paid (and leave if undone); the operator records each spend with date, category and amount; leftover carries over; card on the Painel. The plan's Caixa line **is** the month's top-up: edit it from the Caixa tab ("Reforço de …" box) or the plan; the line shows the Caixa balance (💰) and its side panel the month's Caixa summary; a Caixa line at **0** = no top-up and doesn't keep the month open |
 | Line side panel | **›** on each row (or double-click the row number): all fields incl. Fornecedor / Ordem de Compra, live Purchase Invoice card, links (Próximo Mês, Caixa), change history; ↑ / ↓ to move between lines, Esc to close |
 | Data pretendida | Date by which the operator wants the payment done; red when past and not settled; **Em atraso** toggle with count; in the side panel and as a bulk action; not carried to the next month |
+| Cashflow Settings | ⚙ (managers) on Cashflow and Painel: auto-close, month lock and automatic plan creation on/off; which recurring bill is the Caixa line; Caixa low-balance warning; Painel counts invoices by issue or due date; default company; draft invoices allowed or not; default hidden columns ("Repor padrão" in Colunas) |
+| Ações menu | **Ações ▾** at the top: Copiar despesas recorrentes, Abrir formulário, Imprimir, Exportar Excel, Importar Excel, ⚙ Definições — adapted to the current tab |
 | Hide columns | **Colunas ▾** menu to show / hide any column except Descrição; remembered per browser |
 | Monthly job | On the 1st, the month's plan is created with the recurring bills and the Próximo Mês lines |
 | Painel Financeiro | Manager page (`/app/painel-financeiro`): money in from ERPNext (invoices / payments received) against money out from the plans; cards, chart, month-by-month table with running balance, spending by category, top clients to receive; clicking a month opens it in Cashflow |
@@ -67,7 +69,7 @@ _Last updated: 2026-09-26_
 ## 4. Nice to have
 
 - [ ] **Live updates** — two people with the same month open see each other's changes without refreshing
-- [ ] **Print / PDF / Excel export** of a month, for management
+- [x] **Print / Excel export** — Ações ▾ → Imprimir / Exportar Excel, on every tab, exactly what is shown (filters, visible columns, totals); PDF via the browser's "Save as PDF"
 - [ ] **Reminder on the 1st** — email / notification about unsettled lines and locked months
 - [ ] **Salários, INSS, IRPS (and maybe IVA) from ERPNext** — each Despesa Recorrente gets a "Fonte" (Manual / ERPNext); amounts come from submitted Salary Slips (net pay; INSS and IRPS deductions, plus the employer's 4% INSS) and update by themselves when payroll is submitted or cancelled. Salários land in the payroll month, INSS / IRPS in the **next** month. Shows "estimativa" until payroll runs; never changes a line already Pago. _Open questions: is payroll run in ERPNext? component names? is employer INSS set up? what are INSS-DH / IRPS-DH (another company)? include IVA?_
 - [ ] **Caixa: side panel** — the same details panel for Caixa movements (history, notes)

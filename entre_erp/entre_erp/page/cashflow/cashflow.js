@@ -125,7 +125,9 @@ class CashflowSheet {
 		this.doc = null;
 		this.fila = Promise.resolve();
 		this.selecionadas = new Set(); // row names ticked for a bulk action
-		this.ocultas = ler_colunas_ocultas();
+		this.definicoes = {};
+		// Columns: the user's own choice, else the defaults from Cashflow Settings (set on load).
+		this.ocultas = ler_colunas_ocultas() || new Set(COLUNAS_OCULTAS_POR_DEFEITO);
 		// Header filters { campo: Set of values }, kept while switching months
 		// so you can follow e.g. only STB across the year.
 		this.filtros = {};
@@ -144,7 +146,10 @@ class CashflowSheet {
 					</div>
 					<div class="cf-topo-direita">
 						<div class="cf-topo-acoes"></div>
-						<button class="btn btn-default btn-sm cf-importar">${__("Importar Excel")}</button>
+						<div class="btn-group">
+							<button class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown">${__("Ações")} <span class="caret"></span></button>
+							<div class="dropdown-menu dropdown-menu-right cf-menu-acoes"></div>
+						</div>
 					</div>
 				</div>
 				<div class="cf-conteudo"></div>
@@ -154,7 +159,10 @@ class CashflowSheet {
 
 		this.$body.find(".cf-ano-ant").on("click", () => this.mudar_ano(-1));
 		this.$body.find(".cf-ano-seg").on("click", () => this.mudar_ano(1));
-		this.$body.find(".cf-importar").on("click", () => this.importar_excel());
+		this.$body.on("click", ".cf-acao", (e) => {
+			e.preventDefault();
+			if (!$(e.currentTarget).hasClass("disabled")) this.executar_acao($(e.currentTarget).attr("data-acao"));
+		});
 		this.$body.on("click", ".cf-aba", (e) => this.abrir_aba($(e.currentTarget).attr("data-aba")));
 
 		this.carregar_ano();
@@ -190,6 +198,10 @@ class CashflowSheet {
 		return frappe.xcall(API + "obter_ano", { ano: this.ano }).then((d) => {
 			this.metodos = d.metodos;
 			this.categorias = d.categorias;
+			this.definicoes = d.definicoes || {};
+			DEFINICOES = this.definicoes;
+			if (!ler_colunas_ocultas()) this.ocultas = new Set(this.definicoes.colunas_ocultas || COLUNAS_OCULTAS_POR_DEFEITO);
+
 			this.planos = {};
 			d.planos.forEach((p) => (this.planos[p.name] = p));
 			this.render_abas();
@@ -228,6 +240,7 @@ class CashflowSheet {
 		this.doc = null;
 		this.$body.find(".cf-aba").removeClass("active").filter(`[data-aba="${aba}"]`).addClass("active");
 		this.$body.find(".cf-topo-acoes").empty();
+		this.render_menu_acoes();
 		this.$conteudo = this.$body.find(".cf-conteudo").off().html(`<div class="cf-vazio">${__("A carregar...")}</div>`);
 
 		if (aba === ABA_RESUMO) return this.carregar_resumo();
@@ -237,6 +250,157 @@ class CashflowSheet {
 		const nome = nome_plano(this.ano, aba);
 		if (!this.planos[nome]) return this.render_sem_plano(aba);
 		frappe.xcall(API + "obter_plano", { plano: nome }).then((doc) => this.render_plano(doc));
+	}
+
+	// ------------------------------------------------------------------
+	// "Ações" menu: what can be done on the current tab
+	// ------------------------------------------------------------------
+
+	render_menu_acoes() {
+		const plano = !!this.doc;
+		const so_leitura = plano && (this.doc.estado === "Fechado" || !!this.doc.bloqueio);
+		const item = (acao, texto, desativado = false) =>
+			`<a class="dropdown-item cf-acao ${desativado ? "disabled" : ""}" data-acao="${acao}">${texto}</a>`;
+		const itens = [];
+		if (plano) {
+			itens.push(item("recorrentes", `↻ ${__("Copiar despesas recorrentes")}`, so_leitura));
+			itens.push(item("formulario", `📄 ${__("Abrir formulário")}`));
+			itens.push(`<div class="dropdown-divider"></div>`);
+		}
+		const tem_tabela = plano || [ABA_RESUMO, ABA_CAIXA, ABA_RECORRENTES].includes(this.aba);
+		itens.push(item("imprimir", `🖨 ${__("Imprimir")}`, !tem_tabela));
+		itens.push(item("exportar", `⬇ ${__("Exportar Excel")}`, !tem_tabela));
+		itens.push(`<div class="dropdown-divider"></div>`);
+		itens.push(item("importar", `⬆ ${__("Importar Excel")}`));
+		if (this.definicoes.pode_configurar) itens.push(item("definicoes", `⚙ ${__("Definições")}`));
+		this.$body.find(".cf-menu-acoes").html(itens.join(""));
+	}
+
+	executar_acao(acao) {
+		if (acao === "recorrentes") {
+			return this.guardar(() =>
+				frappe.xcall(API + "preencher_plano", { plano: this.doc.name, acao: "recorrentes" }).then((r) => {
+					frappe.show_alert({
+						message: r.adicionadas ? __("{0} linha(s) adicionada(s).", [r.adicionadas]) : __("Nada novo para adicionar."),
+						indicator: r.adicionadas ? "green" : "blue",
+					});
+					this.render_plano(r.plano);
+				}),
+			);
+		}
+		if (acao === "formulario") return frappe.set_route("Form", "Plano de Pagamentos", this.doc.name);
+		if (acao === "imprimir") return this.imprimir();
+		if (acao === "exportar") return this.exportar_excel();
+		if (acao === "importar") return this.importar_excel();
+		if (acao === "definicoes") return frappe.set_route("Form", "Cashflow Settings");
+	}
+
+	titulo_para_documento() {
+		if (this.doc) return this.titulo_aba(this.aba);
+		if (this.aba === ABA_CAIXA) return __("Caixa {0} {1}", [this.caixa_mes, this.caixa_ano]);
+		if (this.aba === ABA_RESUMO) return __("Resumo Anual {0}", [this.ano]);
+		return __("Despesas Recorrentes");
+	}
+
+	// The table exactly as shown: visible columns (no row numbers / buttons),
+	// visible rows (filters applied) and the total rows.
+	ler_tabela_visivel() {
+		const $tabela = this.$conteudo.find("table.cf-grelha").first();
+		const $ths = $tabela.find("thead tr").first().children("th");
+		const colunas = [];
+		$ths.each((i, th) => {
+			const $th = $(th);
+			const titulo = $th.clone().children("button").remove().end().text().trim();
+			if ($th.hasClass("cf-idx") || !titulo || $th.css("display") === "none") return;
+			colunas.push({ i, titulo, numerica: $th.hasClass("cf-num") });
+		});
+
+		const valor_da_celula = (td, numerica) => {
+			if (!td) return "";
+			const $td = $(td);
+			const $campo = $td.find("input, select").first();
+			let texto;
+			if ($campo.is(":checkbox")) texto = $campo.is(":checked") ? __("Sim") : "";
+			else if ($campo.length) texto = $campo.val() || "";
+			else texto = $td.text().trim();
+			if (texto === "—") texto = "";
+			const e_numero = numerica || $td.hasClass("cf-num") || $campo.hasClass("cf-dinheiro");
+			return e_numero && texto !== "" ? flt(texto) : texto;
+		};
+		const ler_linha = (tr) => {
+			const tds = $(tr).children("td").get();
+			return colunas.map((c) => valor_da_celula(tds[c.i], c.numerica));
+		};
+
+		return {
+			colunas,
+			linhas: $tabela.find("tbody tr:visible").map((_i, tr) => [ler_linha(tr)]).get(),
+			totais: $tabela.find("tfoot tr.cf-total:visible").map((_i, tr) => [ler_linha(tr)]).get(),
+		};
+	}
+
+	exportar_excel() {
+		const t = this.ler_tabela_visivel();
+		if (!t.colunas.length) return frappe.msgprint(__("Nada para exportar neste separador."));
+		open_url_post("/api/method/entre_erp.pagamentos.exportar_excel", {
+			titulo: this.titulo_para_documento(),
+			cabecalhos: JSON.stringify(t.colunas.map((c) => c.titulo)),
+			linhas: JSON.stringify([...t.linhas, ...t.totais]),
+		});
+	}
+
+	imprimir() {
+		const t = this.ler_tabela_visivel();
+		if (!t.colunas.length) return frappe.msgprint(__("Nada para imprimir neste separador."));
+		const titulo = this.titulo_para_documento();
+		const filtrado = this.doc && this.filtros_ativos() > 0;
+		const celula = (v, c) =>
+			`<td class="${c.numerica || typeof v === "number" ? "num" : ""}">${typeof v === "number" ? dinheiro(v) : esc(v)}</td>`;
+		const cartoes = this.$conteudo
+			.find(".cf-kpi")
+			.map((_i, k) => {
+				const label = $(k).find(".cf-kpi-label").text().trim();
+				const valor = $(k).find(".cf-kpi-valor").text().trim();
+				return valor ? `<div class="kpi"><div class="l">${esc(label)}</div><div class="v">${esc(valor)}</div></div>` : "";
+			})
+			.get()
+			.join("");
+
+		const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
+			<style>
+				@page { size: A4 landscape; margin: 12mm; }
+				body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 11px; color: #111; }
+				h1 { font-size: 18px; margin: 0 0 2px; }
+				.sub { color: #666; margin-bottom: 12px; }
+				.kpis { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+				.kpi { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; min-width: 120px; }
+				.kpi .l { color: #666; font-size: 10px; } .kpi .v { font-size: 14px; font-weight: 600; }
+				table { width: 100%; border-collapse: collapse; }
+				th { text-align: left; font-size: 10px; color: #555; border-bottom: 2px solid #333; padding: 4px 6px; }
+				td { border-bottom: 1px solid #e5e5e5; padding: 4px 6px; vertical-align: top; }
+				th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+				tfoot td { font-weight: 700; border-top: 2px solid #333; border-bottom: 0; }
+				tr { page-break-inside: avoid; }
+			</style></head><body>
+			<h1>${esc(titulo)}</h1>
+			<div class="sub">${__("Impresso em {0} por {1}", [
+				frappe.datetime.str_to_user(frappe.datetime.now_datetime()),
+				esc(frappe.session.user_fullname),
+			])}${filtrado ? ` · <b>${__("com filtros aplicados")}</b>` : ""}</div>
+			${cartoes ? `<div class="kpis">${cartoes}</div>` : ""}
+			<table>
+				<thead><tr>${t.colunas.map((c) => `<th class="${c.numerica ? "num" : ""}">${esc(c.titulo)}</th>`).join("")}</tr></thead>
+				<tbody>${t.linhas.map((l) => `<tr>${l.map((v, i) => celula(v, t.colunas[i])).join("")}</tr>`).join("")}</tbody>
+				<tfoot>${t.totais.map((l) => `<tr>${l.map((v, i) => celula(v, t.colunas[i])).join("")}</tr>`).join("")}</tfoot>
+			</table>
+			<script>window.onload = () => { window.print(); };<\/script>
+		</body></html>`;
+
+		const janela = window.open("", "_blank");
+		if (!janela) return frappe.msgprint(__("O navegador bloqueou a janela de impressão. Permita pop-ups para este site."));
+		janela.document.open();
+		janela.document.write(html);
+		janela.document.close();
 	}
 
 	titulo_aba(aba) {
@@ -283,11 +447,8 @@ class CashflowSheet {
 			<select class="form-control input-sm cf-estado-plano" title="${__("Estado do Plano")}" ${bloqueio ? "disabled" : ""}>
 				${ESTADOS_PLANO.map((e) => `<option ${e === doc.estado ? "selected" : ""}>${e}</option>`).join("")}
 			</select>
-			<button class="btn btn-default btn-sm cf-preencher" data-acao="recorrentes" ${so_leitura ? "disabled" : ""}>
-				${__("Copiar Despesas Recorrentes")}
-			</button>
-			<button class="btn btn-default btn-sm cf-abrir-form">${__("Formulário")}</button>
 		`);
+		this.render_menu_acoes();
 
 		this.$conteudo.html(`
 			<div class="cf-cabecalho"></div>
@@ -322,7 +483,10 @@ class CashflowSheet {
 								</label>`,
 							)
 							.join("")}
-						<div class="cf-filtro-rodape"><button class="btn btn-xs btn-default cf-colunas-todas">${__("Mostrar todas")}</button></div>
+						<div class="cf-filtro-rodape">
+							<button class="btn btn-xs btn-default cf-colunas-padrao">${__("Repor padrão")}</button>
+							<button class="btn btn-xs btn-default cf-colunas-todas">${__("Mostrar todas")}</button>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -402,7 +566,9 @@ class CashflowSheet {
 
 	html_chip_caixa() {
 		const c = this.doc && this.doc.caixa;
-		return c ? `💰 <span class="${c.saldo_final < 0 ? "cf-vermelho" : ""}">${dinheiro(c.saldo_final)}</span>` : `💰 ${__("Caixa")}`;
+		if (!c) return `💰 ${__("Caixa")}`;
+		const cls = c.saldo_final < 0 ? "cf-vermelho" : caixa_abaixo_do_aviso(c.saldo_final) ? "cf-laranja" : "";
+		return `💰 <span class="${cls}">${dinheiro(c.saldo_final)}</span>${caixa_abaixo_do_aviso(c.saldo_final) ? " ⚠" : ""}`;
 	}
 
 	render_cabecalho(p) {
@@ -606,10 +772,18 @@ class CashflowSheet {
 			if (e.currentTarget.checked) this.ocultas.delete(e.currentTarget.value);
 			else this.ocultas.add(e.currentTarget.value);
 			this.aplicar_colunas();
+			guardar_colunas_ocultas(this.ocultas);
 		});
 		$c.on("click", ".cf-colunas-todas", () => {
 			this.ocultas.clear();
 			$c.find(".cf-coluna-check").prop("checked", true);
+			this.aplicar_colunas();
+			guardar_colunas_ocultas(this.ocultas);
+		});
+		$c.on("click", ".cf-colunas-padrao", () => {
+			esquecer_colunas_ocultas();
+			this.ocultas = new Set(this.definicoes.colunas_ocultas || COLUNAS_OCULTAS_POR_DEFEITO);
+			$c.find(".cf-coluna-check").each((_i, el) => (el.checked = !this.ocultas.has(el.value)));
 			this.aplicar_colunas();
 		});
 
@@ -647,21 +821,6 @@ class CashflowSheet {
 					.then(() => this.abrir_aba(this.aba)),
 			);
 		});
-		$acoes.find(".cf-preencher").on("click", (e) => {
-			const acao = $(e.currentTarget).attr("data-acao");
-			this.guardar(() =>
-				frappe.xcall(API + "preencher_plano", { plano: this.doc.name, acao }).then((r) => {
-					frappe.show_alert({
-						message: r.adicionadas
-							? __("{0} linha(s) adicionada(s).", [r.adicionadas])
-							: __("Nada novo para adicionar."),
-						indicator: r.adicionadas ? "green" : "blue",
-					});
-					this.render_plano(r.plano);
-				}),
-			);
-		});
-		$acoes.find(".cf-abrir-form").on("click", () => frappe.set_route("Form", "Plano de Pagamentos", this.doc.name));
 
 		this.aplicar_colunas();
 		this.aplicar_filtros();
@@ -674,7 +833,6 @@ class CashflowSheet {
 		this.$conteudo
 			.find(".cf-colunas-btn")
 			.html(`${__("Colunas")}${n ? ` <span class="cf-colunas-n">${__("{0} ocultas", [n])}</span>` : ""} <span class="caret"></span>`);
-		guardar_colunas_ocultas(this.ocultas);
 	}
 
 	// ------------------------------------------------------------------
@@ -690,7 +848,7 @@ class CashflowSheet {
 				args: {
 					doctype: coluna.doctype,
 					txt: input.value,
-					filters: { docstatus: ["!=", 2] },
+					filters: filtro_facturas(),
 					page_length: 15,
 				},
 				callback: (r) => {
@@ -1015,7 +1173,7 @@ class CashflowSheet {
 			label: __("Factura (Purchase Invoice)"),
 			fieldtype: "Link",
 			options: "Purchase Invoice",
-			get_query: () => ({ filters: { docstatus: ["!=", 2] } }),
+			get_query: () => ({ filters: filtro_facturas() }),
 		});
 		campo("documentos", { fieldname: "ordem_compra", label: __("Ordem de Compra"), fieldtype: "Data" });
 		campo("observacoes", { fieldname: "observacoes", label: "", fieldtype: "Small Text" });
@@ -1565,6 +1723,17 @@ class CashflowSheet {
 			</div>
 		`);
 		this.render_resumo_caixa(d.resumo);
+		if (d.aviso_saldo > 0 && d.resumo.saldo_atual < d.aviso_saldo) {
+			$(`<div class="cf-aviso-bloqueio cf-aviso-caixa">
+				<span>⚠ ${__("O saldo da Caixa ({0}) está abaixo de {1}.", [dinheiro(d.resumo.saldo_atual), dinheiro(d.aviso_saldo)])}</span>
+				${
+					d.reforco_do_mes && d.reforco_do_mes.linha && d.reforco_do_mes.editavel
+						? `<button class="btn btn-primary btn-xs cf-pedir-reforco">${__("Definir reforço de {0}", [esc(d.mes)])}</button>`
+						: ""
+				}
+			</div>`).insertBefore(this.$conteudo.find(".cf-caixa-reforco"));
+			this.$conteudo.find(".cf-pedir-reforco").on("click", () => this.$conteudo.find(".cf-reforco-valor").trigger("focus").trigger("select"));
+		}
 		this.recalcular_saldos_caixa();
 		this.bind_caixa();
 		if (focar) this.$conteudo.find(`tr[data-name="${focar}"] [data-campo="valor"]`).trigger("focus");
@@ -1914,13 +2083,23 @@ function ler_celula(coluna, $el) {
 const CHAVE_COLUNAS = "entre_erp.cashflow.colunas_ocultas.v3";
 const COLUNAS_OCULTAS_POR_DEFEITO = ["data_pagamento", "factura"];
 
+// The user's own choice, or null when they never changed the columns
+// (then the defaults from Cashflow Settings apply).
 function ler_colunas_ocultas() {
 	try {
 		const texto = localStorage.getItem(CHAVE_COLUNAS);
-		const guardadas = texto === null ? COLUNAS_OCULTAS_POR_DEFEITO : JSON.parse(texto);
-		return new Set(guardadas.filter((c) => COLUNAS_PLANO.some((col) => col.campo === c && !col.fixa)));
+		if (texto === null) return null;
+		return new Set(JSON.parse(texto).filter((c) => COLUNAS_PLANO.some((col) => col.campo === c && !col.fixa)));
 	} catch (e) {
-		return new Set(COLUNAS_OCULTAS_POR_DEFEITO);
+		return null;
+	}
+}
+
+function esquecer_colunas_ocultas() {
+	try {
+		localStorage.removeItem(CHAVE_COLUNAS);
+	} catch (e) {
+		// storage blocked: nothing was remembered anyway
 	}
 }
 
@@ -1937,10 +2116,25 @@ function url_link(coluna, valor) {
 }
 
 // Same rule as entre_erp.caixa.e_linha_de_caixa
+// Settings the server sent (Cashflow Settings), for the helpers below.
+let DEFINICOES = {};
+
+const normalizar = (texto) =>
+	(texto || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+// Same rule as entre_erp.pagamentos.e_linha_de_caixa
 function e_linha_de_caixa(row) {
-	if (row.despesa_recorrente === "Caixa") return true;
-	const texto = (row.descricao || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-	return texto.startsWith("caixa");
+	const nome = DEFINICOES.despesa_caixa || "Caixa";
+	if (row.despesa_recorrente === nome) return true;
+	return normalizar(row.descricao).startsWith(normalizar(nome));
+}
+
+function filtro_facturas() {
+	return { docstatus: DEFINICOES.permitir_facturas_rascunho === false ? 1 : ["!=", 2] };
+}
+
+function caixa_abaixo_do_aviso(saldo) {
+	return DEFINICOES.aviso_saldo_caixa > 0 && saldo < DEFINICOES.aviso_saldo_caixa;
 }
 
 function definir_classe_estado($tr, estado) {

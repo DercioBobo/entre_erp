@@ -33,6 +33,7 @@ class PainelFinanceiro {
 					<div class="pf-topo-direita">
 						<select class="form-control input-sm pf-empresa" style="display:none"></select>
 						<button class="btn btn-default btn-sm pf-abrir-cashflow">${__("Abrir Cashflow")} →</button>
+						<button class="btn btn-default btn-sm pf-configurar" style="display:none" title="${__("Definições do Cashflow")}">⚙</button>
 					</div>
 				</div>
 				<div class="pf-conteudo"><div class="pf-vazio">${__("A carregar...")}</div></div>
@@ -46,6 +47,7 @@ class PainelFinanceiro {
 			this.carregar();
 		});
 		this.$body.find(".pf-abrir-cashflow").on("click", () => frappe.set_route("cashflow"));
+		this.$body.find(".pf-configurar").on("click", () => frappe.set_route("Form", "Cashflow Settings"));
 
 		this.carregar();
 	}
@@ -65,6 +67,7 @@ class PainelFinanceiro {
 
 	render(d) {
 		this.company = d.company;
+		this.$body.find(".pf-configurar").toggle(!!d.pode_configurar);
 		const $empresa = this.$body.find(".pf-empresa");
 		$empresa
 			.html(d.empresas.map((e) => `<option ${e === d.company ? "selected" : ""}>${pf_esc(e)}</option>`).join(""))
@@ -85,7 +88,11 @@ class PainelFinanceiro {
 		this.$body.find(".pf-conteudo").html(`
 			${this.html_alerta(d.mes_atual)}
 			<div class="pf-cards">
-				${this.card(__("Entradas previstas"), t.entradas_previstas, __("Facturas emitidas"))}
+				${this.card(
+					__("Entradas previstas"),
+					t.entradas_previstas,
+					d.entradas_por_vencimento ? __("Facturas pela data de vencimento") : __("Facturas pela data de emissão"),
+				)}
 				${this.card(__("Entradas reais"), t.entradas_reais, __("{0}% do previsto", [pct(t.entradas_reais, t.entradas_previstas)]), "pf-positivo")}
 				${this.card(__("Saídas previstas"), t.saidas_previstas, __("Planos mensais"))}
 				${this.card(__("Saídas reais"), t.saidas_reais, __("{0}% do previsto", [pct(t.saidas_reais, t.saidas_previstas)]))}
@@ -107,7 +114,11 @@ class PainelFinanceiro {
 					`💰 ${__("Caixa (saldo actual)")}`,
 					d.caixa.saldo_atual,
 					__("Gastos em {0}: {1}", [d.caixa.mes, pf_dinheiro(d.caixa.gastos)]),
-					d.caixa.saldo_atual < 0 ? "pf-negativo" : "",
+					d.caixa.saldo_atual < 0
+						? "pf-negativo"
+						: d.caixa.aviso_saldo > 0 && d.caixa.saldo_atual < d.caixa.aviso_saldo
+							? "pf-aviso"
+							: "",
 				)}
 			</div>
 
@@ -313,6 +324,7 @@ function pf_inject_styles() {
 			--pf-laranja: #fbbf24;
 		}
 		.pf-positivo { color: var(--pf-verde) !important; }
+		.pf-aviso { color: var(--pf-laranja) !important; }
 		.pf-negativo { color: var(--pf-vermelho) !important; }
 
 		.pf-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }

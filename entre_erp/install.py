@@ -5,6 +5,7 @@ def after_install():
     create_tech_lead_role()
     create_tech_role()
     create_categorias_de_despesa()
+    create_cashflow_settings()
 
 
 def create_tech_lead_role():
@@ -43,6 +44,16 @@ def create_categorias_de_despesa():
             frappe.get_doc({"doctype": "Categoria de Despesa", "categoria": categoria}).insert(
                 ignore_permissions=True
             )
+
+
+def create_cashflow_settings():
+    """Saves Cashflow Settings once so every setting holds its default."""
+    settings = frappe.get_single("Cashflow Settings")
+    for df in settings.meta.fields:
+        if df.default is not None and settings.get(df.fieldname) in (None, ""):
+            settings.set(df.fieldname, df.default)
+    settings.flags.ignore_permissions = True
+    settings.save()
 
 
 def _create_role_if_missing(role_name):

@@ -10,6 +10,7 @@ from entre_erp.pagamentos import (
 	ESTADO_PROXIMO_MES,
 	ESTADOS_FORA_DO_MES,
 	bloqueio_do_mes_anterior,
+	ligado,
 	linha_por_liquidar,
 	mes_anterior,
 	mes_seguinte,
@@ -144,6 +145,8 @@ class PlanodePagamentos(Document):
 		closed again until something new in it gets settled."""
 		if self.tipo != "Mensal" or self.estado == "Fechado" or not self.linhas:
 			return
+		if not ligado("fechar_automaticamente"):
+			return
 		if self._linhas_por_liquidar():
 			return
 		antes = self.get_doc_before_save()
@@ -273,12 +276,27 @@ class PlanodePagamentos(Document):
 	def _preencher_linhas(self):
 		antes = self.get_doc_before_save()
 		estado_antes = {r.name: r.estado for r in (antes.linhas if antes else [])}
+		factura_antes = {r.name: r.factura for r in (antes.linhas if antes else [])}
+		self._validar_facturas_rascunho(factura_antes)
 		for row in self.linhas:
 			self._preencher_da_factura(row)
 			row.valor_pago = valor_pago_da_linha(row)
 			if row.despesa_recorrente and not row.categoria:
 				row.categoria = frappe.db.get_value("Despesa Recorrente", row.despesa_recorrente, "categoria")
 			self._registar_pagamento(row, estado_antes.get(row.name))
+
+	def _validar_facturas_rascunho(self, factura_antes):
+		if ligado("permitir_facturas_rascunho") or self.flags.importacao:
+			return
+		for row in self.linhas:
+			if not row.factura or factura_antes.get(row.name) == row.factura:
+				continue
+			if frappe.db.get_value("Purchase Invoice", row.factura, "docstatus") != 1:
+				frappe.throw(
+					_("{0}: a factura {1} ainda não está submetida (as definições do Cashflow só permitem facturas submetidas).").format(
+						frappe.bold(row.descricao), row.factura
+					)
+				)
 
 	def _preencher_da_factura(self, row):
 		"""Supplier always follows the linked Purchase Invoice; the amount

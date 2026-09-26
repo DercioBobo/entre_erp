@@ -35,12 +35,23 @@ ESTADOS_LIQUIDADOS = (ESTADO_PAGO, ESTADO_CANCELADO, ESTADO_PROXIMO_MES)
 DESPESA_CAIXA = "Caixa"
 
 
+def despesa_caixa():
+	"""The recurring bill that is the Caixa line (Cashflow Settings)."""
+	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import definicao
+
+	return definicao("despesa_caixa", DESPESA_CAIXA)
+
+
+def _normalizar(texto):
+	return unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().strip().lower()
+
+
 def e_linha_de_caixa(row):
 	"""The plan's Caixa line: the month's top-up for the Caixa (petty cash)."""
-	if row.get("despesa_recorrente") == DESPESA_CAIXA:
+	nome = despesa_caixa()
+	if row.get("despesa_recorrente") == nome:
 		return True
-	texto = unicodedata.normalize("NFKD", row.get("descricao") or "").encode("ascii", "ignore").decode()
-	return texto.strip().lower().startswith("caixa")
+	return bool(nome) and _normalizar(row.get("descricao")).startswith(_normalizar(nome))
 
 
 def linha_por_liquidar(row):
@@ -80,6 +91,8 @@ def criar_plano_do_mes():
 	"""Scheduler (monthly): make sure the current month has a plan, filled
 	with the active Despesas Recorrentes and last month's Próximo Mês lines.
 	Safe to run more than once — an existing plan is only topped up."""
+	if not ligado("criar_plano_automaticamente"):
+		return
 	hoje = frappe.utils.getdate()
 	ano, mes = hoje.year, MESES[hoje.month - 1]
 	nome = nome_plano("Mensal", ano, mes)
@@ -100,6 +113,8 @@ def criar_plano_do_mes():
 def bloqueio_do_mes_anterior(ano, mes):
 	"""A month is locked while the month before it is not Fechado and still
 	has lines to settle (pay, cancel or move to Próximo Mês)."""
+	if not ligado("bloquear_mes_seguinte"):
+		return None
 	ano_ant, mes_ant = mes_anterior(ano, mes)
 	nome = nome_plano("Mensal", ano_ant, mes_ant)
 	anterior = frappe.db.get_value("Plano de Pagamentos", nome, ["estado", "titulo"], as_dict=True)
@@ -157,6 +172,12 @@ def desligar_factura_cancelada(doc, method=None):
 		)
 
 
+def ligado(campo):
+	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import ligado as _ligado
+
+	return _ligado(campo)
+
+
 def valor_pago_da_linha(row):
 	if row.estado == ESTADO_PAGO and not flt(row.valor_pago):
 		return flt(row.valor)
@@ -196,8 +217,15 @@ def obter_ano(ano):
 			fields=["name", "tipo", "mes", "estado", "total_previsto", "total_pago", "total_remanescente"],
 		),
 		"metodos": frappe.get_all("Mode of Payment", filters={"enabled": 1}, pluck="name", order_by="name"),
+		"definicoes": definicoes_para_a_pagina(),
 		"categorias": frappe.get_all("Categoria de Despesa", pluck="name", order_by="name"),
 	}
+
+
+def definicoes_para_a_pagina():
+	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import para_a_pagina
+
+	return para_a_pagina()
 
 
 @frappe.whitelist()
@@ -440,6 +468,20 @@ def _historico_da_linha(plano, linha, limite=30):
 		if len(historico) >= limite:
 			break
 	return historico[:limite]
+
+
+@frappe.whitelist()
+def exportar_excel(titulo, cabecalhos, linhas):
+	"""Excel of what the Cashflow page shows (visible rows and columns,
+	filters applied). The page sends the table; this only builds the file."""
+	frappe.has_permission("Plano de Pagamentos", "read", throw=True)
+	from frappe.utils.xlsxutils import make_xlsx
+
+	nome_folha = "".join(ch for ch in titulo if ch not in '[]:*?/\\')[:31] or "Cashflow"
+	ficheiro = make_xlsx([frappe.parse_json(cabecalhos), *frappe.parse_json(linhas)], nome_folha)
+	frappe.response["filename"] = f"{titulo}.xlsx"
+	frappe.response["filecontent"] = ficheiro.getvalue()
+	frappe.response["type"] = "binary"
 
 
 def _plano_editavel(plano):

@@ -14,6 +14,7 @@ import frappe
 from frappe.utils import flt, getdate
 
 from entre_erp import caixa
+from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import definicao
 from entre_erp.pagamentos import (
 	ESTADOS_FORA_DO_MES,
 	MESES,
@@ -30,15 +31,23 @@ def obter_painel(ano, company=None):
 	frappe.only_for(PAPEIS)
 	ano = int(ano)
 	empresas = frappe.get_all("Company", pluck="name", order_by="name")
-	company = company or frappe.defaults.get_user_default("Company") or (empresas[0] if empresas else None)
+	company = (
+		company
+		or definicao("empresa_padrao")
+		or frappe.defaults.get_user_default("Company")
+		or (empresas[0] if empresas else None)
+	)
+	# Expected money in: invoices by issue date, or by when they fall due.
+	por_vencimento = definicao("entradas_previstas_por", "Data da factura") == "Data de vencimento"
+	data_prevista = "due_date" if por_vencimento else "posting_date"
 	moeda = frappe.get_cached_value("Company", company, "default_currency") if company else None
 
 	entradas_previstas = _por_mes(
-		"""
-		select month(posting_date), sum(base_grand_total)
+		f"""
+		select month({data_prevista}), sum(base_grand_total)
 		from `tabSales Invoice`
-		where docstatus = 1 and company = %(company)s and year(posting_date) = %(ano)s
-		group by month(posting_date)
+		where docstatus = 1 and company = %(company)s and year({data_prevista}) = %(ano)s
+		group by month({data_prevista})
 		""",
 		company,
 		ano,
@@ -106,6 +115,8 @@ def obter_painel(ano, company=None):
 		"company": company,
 		"empresas": empresas,
 		"moeda": moeda,
+		"entradas_por_vencimento": por_vencimento,
+		"pode_configurar": frappe.has_permission("Cashflow Settings", "write"),
 		"meses": meses,
 		"por_receber": _por_receber(company, moeda),
 		"clientes_por_receber": _clientes_por_receber(company, moeda),

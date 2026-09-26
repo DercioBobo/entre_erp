@@ -1,0 +1,221 @@
+{
+ "actions": [],
+ "creation": "2026-09-26 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_mes",
+  "fechar_automaticamente",
+  "bloquear_mes_seguinte",
+  "criar_plano_automaticamente",
+  "section_caixa",
+  "despesa_caixa",
+  "column_break_caixa",
+  "aviso_saldo_caixa",
+  "section_painel",
+  "entradas_previstas_por",
+  "column_break_painel",
+  "empresa_padrao",
+  "section_facturas",
+  "permitir_facturas_rascunho",
+  "section_colunas",
+  "ocultar_valor",
+  "ocultar_prioridade",
+  "ocultar_estado",
+  "ocultar_data_pretendida",
+  "ocultar_valor_pago",
+  "column_break_colunas",
+  "ocultar_data_pagamento",
+  "ocultar_metodo_pagamento",
+  "ocultar_categoria",
+  "ocultar_factura",
+  "ocultar_observacoes"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_mes",
+   "fieldtype": "Section Break",
+   "label": "Regras do mês"
+  },
+  {
+   "fieldname": "fechar_automaticamente",
+   "fieldtype": "Check",
+   "label": "Fechar o mês automaticamente quando tudo estiver liquidado",
+   "default": "1",
+   "description": "Quando a última linha fica Paga, Cancelada ou em Próximo Mês, o plano passa a Fechado."
+  },
+  {
+   "fieldname": "bloquear_mes_seguinte",
+   "fieldtype": "Check",
+   "label": "Bloquear um mês até o anterior estar liquidado",
+   "default": "1",
+   "description": "Enquanto o mês anterior tiver linhas por liquidar, o mês seguinte fica só de leitura."
+  },
+  {
+   "fieldname": "criar_plano_automaticamente",
+   "fieldtype": "Check",
+   "label": "Criar o plano do mês automaticamente no dia 1",
+   "default": "1",
+   "description": "Com as Despesas Recorrentes ativas e as linhas em Próximo Mês do mês anterior."
+  },
+  {
+   "fieldname": "section_caixa",
+   "fieldtype": "Section Break",
+   "label": "Caixa"
+  },
+  {
+   "fieldname": "despesa_caixa",
+   "fieldtype": "Link",
+   "label": "Despesa recorrente da Caixa",
+   "options": "Despesa Recorrente",
+   "default": "Caixa",
+   "description": "A linha do plano com esta despesa (ou cuja descrição começa pelo mesmo nome) é o reforço mensal da Caixa."
+  },
+  {
+   "fieldname": "column_break_caixa",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "aviso_saldo_caixa",
+   "fieldtype": "Currency",
+   "label": "Avisar quando o saldo da Caixa ficar abaixo de",
+   "description": "0 = sem aviso."
+  },
+  {
+   "fieldname": "section_painel",
+   "fieldtype": "Section Break",
+   "label": "Painel Financeiro"
+  },
+  {
+   "fieldname": "entradas_previstas_por",
+   "fieldtype": "Select",
+   "label": "Entradas previstas contam as facturas pela",
+   "options": "Data da factura\nData de vencimento",
+   "default": "Data da factura",
+   "description": "Data de vencimento aproxima-se mais de quando o dinheiro chega de facto."
+  },
+  {
+   "fieldname": "column_break_painel",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "empresa_padrao",
+   "fieldtype": "Link",
+   "label": "Empresa por defeito",
+   "options": "Company"
+  },
+  {
+   "fieldname": "section_facturas",
+   "fieldtype": "Section Break",
+   "label": "Facturas de fornecedor"
+  },
+  {
+   "fieldname": "permitir_facturas_rascunho",
+   "fieldtype": "Check",
+   "label": "Permitir ligar facturas em rascunho",
+   "default": "1",
+   "description": "Desligado: só facturas submetidas podem ser escolhidas na coluna Factura."
+  },
+  {
+   "fieldname": "section_colunas",
+   "fieldtype": "Section Break",
+   "label": "Colunas ocultas por defeito na grelha",
+   "collapsible": 1,
+   "description": "Para quem ainda não escolheu as suas colunas (ou carrega em Colunas → Repor padrão). Cada utilizador pode mudar as suas."
+  },
+  {
+   "fieldname": "ocultar_valor",
+   "fieldtype": "Check",
+   "label": "Valor",
+   "default": "0"
+  },
+  {
+   "fieldname": "ocultar_prioridade",
+   "fieldtype": "Check",
+   "label": "Prior.",
+   "default": "0"
+  },
+  {
+   "fieldname": "ocultar_estado",
+   "fieldtype": "Check",
+   "label": "Estado",
+   "default": "0"
+  },
+  {
+   "fieldname": "ocultar_data_pretendida",
+   "fieldtype": "Check",
+   "label": "Data pretendida",
+   "default": "0"
+  },
+  {
+   "fieldname": "ocultar_valor_pago",
+   "fieldtype": "Check",
+   "label": "Valor Pago",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_colunas",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ocultar_data_pagamento",
+   "fieldtype": "Check",
+   "label": "Pago em",
+   "default": "1"
+  },
+  {
+   "fieldname": "ocultar_metodo_pagamento",
+   "fieldtype": "Check",
+   "label": "Método",
+   "default": "0"
+  },
+  {
+   "fieldname": "ocultar_categoria",
+   "fieldtype": "Check",
+   "label": "Categoria",
+   "default": "0"
+  },
+  {
+   "fieldname": "ocultar_factura",
+   "fieldtype": "Check",
+   "label": "Factura",
+   "default": "1"
+  },
+  {
+   "fieldname": "ocultar_observacoes",
+   "fieldtype": "Check",
+   "label": "Observações",
+   "default": "0"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-26 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Cashflow Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

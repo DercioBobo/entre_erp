@@ -18,7 +18,7 @@ from frappe import _
 from frappe.utils import flt, getdate
 
 from entre_erp.pagamentos import (
-	DESPESA_CAIXA,
+	despesa_caixa,
 	ESTADO_PAGO,
 	ESTADO_PARCIAL,
 	MESES,
@@ -125,7 +125,14 @@ def obter_caixa(ano, mes):
 		"movimentos": movimentos,
 		"resumo": resumo(ano, mes),
 		"reforco_do_mes": reforco_do_mes(ano, mes),
+		"aviso_saldo": _aviso_saldo(),
 	}
+
+
+def _aviso_saldo():
+	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import definicao
+
+	return flt(definicao("aviso_saldo_caixa", 0))
 
 
 def reforco_do_mes(ano, mes):
@@ -165,14 +172,15 @@ def adicionar_linha_caixa(ano, mes):
 
 	doc = _plano_editavel(nome_plano("Mensal", int(ano), mes))
 	if not any(e_linha_de_caixa(r) for r in doc.linhas):
+		nome = despesa_caixa()
 		recorrente = frappe.db.get_value(
-			"Despesa Recorrente", DESPESA_CAIXA, ["categoria", "metodo_pagamento", "prioridade"], as_dict=True
+			"Despesa Recorrente", nome, ["categoria", "metodo_pagamento", "prioridade"], as_dict=True
 		)
 		doc.append(
 			"linhas",
 			{
-				"descricao": DESPESA_CAIXA,
-				"despesa_recorrente": DESPESA_CAIXA if recorrente else None,
+				"descricao": nome,
+				"despesa_recorrente": nome if recorrente else None,
 				"categoria": recorrente.categoria if recorrente else None,
 				"metodo_pagamento": recorrente.metodo_pagamento if recorrente else None,
 				"prioridade": recorrente.prioridade if recorrente else None,
@@ -252,7 +260,13 @@ def resumo_atual():
 	hoje = getdate()
 	mes = MESES[hoje.month - 1]
 	r = resumo(hoje.year, mes)
-	return {"mes": mes, "saldo_atual": r["saldo_atual"], "gastos": r["gastos"], "reforcos": r["reforcos"]}
+	return {
+		"mes": mes,
+		"saldo_atual": r["saldo_atual"],
+		"gastos": r["gastos"],
+		"reforcos": r["reforcos"],
+		"aviso_saldo": _aviso_saldo(),
+	}
 
 
 def _saldo(filtro_data):
