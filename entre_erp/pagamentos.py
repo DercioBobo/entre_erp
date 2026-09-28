@@ -4,7 +4,7 @@ import unicodedata
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 MESES = [
 	"Janeiro",
@@ -23,6 +23,8 @@ MESES = [
 
 ESTADO_PAGO = "Pago"
 ESTADO_PARCIAL = "Parcialmente Pago"
+# Investimentos is a list of planned expenses: nothing is paid there.
+ESTADOS_INVESTIMENTO = ("Pendente", "Em Espera", "Cancelado")
 ESTADO_PROXIMO_MES = "Próximo Mês"
 ESTADO_CANCELADO = "Cancelado"
 # Lines that stay on the sheet but don't count for this month, except for
@@ -42,8 +44,9 @@ def despesa_caixa():
 	return definicao("despesa_caixa", DESPESA_CAIXA)
 
 
-def _normalizar(texto):
-	return unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().strip().lower()
+def normalizar(texto):
+	"""For comparing descriptions: no accents, lower case, single spaces."""
+	return " ".join(unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().lower().split())
 
 
 def e_linha_de_caixa(row):
@@ -51,7 +54,7 @@ def e_linha_de_caixa(row):
 	nome = despesa_caixa()
 	if row.get("despesa_recorrente") == nome:
 		return True
-	return bool(nome) and _normalizar(row.get("descricao")).startswith(_normalizar(nome))
+	return bool(nome) and normalizar(row.get("descricao")).startswith(normalizar(nome))
 
 
 def linha_por_liquidar(row):
@@ -286,6 +289,87 @@ def adicionar_linha(plano, descricao):
 @frappe.whitelist()
 def remover_linha(plano, linha):
 	return remover_linhas(plano, [linha])
+
+
+@frappe.whitelist()
+def mover_linhas(plano, linhas, destino_ano=None, destino_mes=None, para_investimentos=0):
+	"""Moves lines between Investimentos (planned, not paid there) and a
+	month (where they get paid). The lines leave the origin plan; each
+	keeps where it came from in "Movida de". Everything happens in one
+	request, so if the destination refuses (closed, locked…), nothing moves."""
+	origem = _plano_editavel(plano)
+	para_investimentos = cint(para_investimentos)
+	if para_investimentos:
+		if origem.tipo != "Mensal":
+			frappe.throw(_("Só linhas de um mês podem ir para Investimentos."))
+		tipo, ano, mes = "Investimentos", origem.ano, None
+	else:
+		if origem.tipo != "Investimentos":
+			frappe.throw(_("Só linhas de Investimentos podem ser movidas para um mês."))
+		tipo, ano, mes = "Mensal", cint(destino_ano), destino_mes
+		if mes not in MESES:
+			frappe.throw(_("Escolha o mês de destino."))
+
+	nomes = frappe.parse_json(linhas)
+	rows = [_linha(origem, nome) for nome in nomes]
+	for row in rows:
+		motivo = motivo_para_nao_mover(row, para_investimentos)
+		if motivo:
+			frappe.throw(_("{0}: {1}").format(frappe.bold(row.descricao), motivo), title=_("Não é possível mover"))
+
+	dados = [
+		{
+			campo: row.get(campo)
+			for campo in (
+				"descricao", "valor", "prioridade", "estado", "data_pretendida", "metodo_pagamento",
+				"categoria", "fornecedor", "factura", "ordem_compra", "observacoes",
+			)
+		}
+		for row in rows
+	]
+	# Leave the origin first: the same invoice can't be on two active lines.
+	for row in rows:
+		origem.remove(row)
+	origem.save()
+
+	nome_destino = nome_plano(tipo, ano, mes)
+	if frappe.db.exists("Plano de Pagamentos", nome_destino):
+		destino = _plano_editavel(nome_destino)
+	else:
+		destino = frappe.get_doc({"doctype": "Plano de Pagamentos", "tipo": tipo, "ano": ano, "mes": mes})
+		if tipo == "Mensal":
+			destino.adicionar_despesas_recorrentes()
+			destino.adicionar_linhas_proximo_mes()
+
+	novas = []
+	for linha in dados:
+		if tipo == "Mensal" or linha["estado"] not in ESTADOS_INVESTIMENTO:
+			# Scheduled into a month = to be paid there.
+			linha["estado"] = "Pendente"
+		novas.append(destino.append("linhas", {**linha, "movida_de": origem.titulo}))
+	destino.save()
+
+	return {
+		"origem": origem.as_dict(),
+		"destino": {"name": destino.name, "titulo": destino.titulo, "tipo": destino.tipo, "ano": destino.ano, "mes": destino.mes},
+		"novas": [r.name for r in novas],
+	}
+
+
+def motivo_para_nao_mover(row, para_investimentos):
+	"""Why a line can't move (None when it can)."""
+	if row.estado in (ESTADO_PAGO, ESTADO_PARCIAL) or flt(row.valor_pago):
+		return _("já tem pagamento — fica onde foi paga.")
+	if row.estado == ESTADO_PROXIMO_MES:
+		return _("está em Próximo Mês — trate-a no mês seguinte.")
+	if para_investimentos:
+		if row.despesa_recorrente:
+			return _("é uma despesa fixa (recorrente) — só despesas pontuais vão para Investimentos.")
+		if e_linha_de_caixa(row):
+			return _("é a linha da Caixa.")
+		if row.linha_origem:
+			return _("veio do mês anterior (Próximo Mês) — trate-a neste mês.")
+	return None
 
 
 @frappe.whitelist()

@@ -20,7 +20,8 @@
   "ordem_compra",
   "section_break_obs",
   "observacoes",
-  "linha_origem"
+  "linha_origem",
+  "movida_de"
  ],
  "fields": [
   {
@@ -141,10 +142,18 @@
    "no_copy": 1,
    "read_only": 1,
    "description": "Linha do mês anterior de onde esta foi transportada (Próximo Mês)."
+  },
+  {
+   "fieldname": "movida_de",
+   "fieldtype": "Data",
+   "label": "Movida de",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Plano de onde a linha foi movida (Investimentos ↔ mês)."
   }
  ],
  "links": [],
- "modified": "2026-09-26 00:00:00.000000",
+ "modified": "2026-09-28 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Linha do Plano de Pagamentos",

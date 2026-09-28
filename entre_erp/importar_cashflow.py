@@ -96,11 +96,12 @@ def importar(caminho, ano=2026, substituir=False, planos=None):
 	_criar_despesas_recorrentes()
 
 	resultado = []
+	facturas_usadas = set()
 	for plano in ler_cashflow(caminho, ano):
 		nome = nome_plano(plano["tipo"], ano, plano.get("mes"))
 		if planos is not None and nome not in planos:
 			continue
-		_resolver_facturas(plano)
+		_resolver_facturas(plano, facturas_usadas, ignorar_plano=nome)
 		if frappe.db.exists("Plano de Pagamentos", nome):
 			if not (substituir is True or (isinstance(substituir, (list, tuple)) and nome in substituir)):
 				resultado.append(f"{nome}: já existe, ignorado")
@@ -147,8 +148,9 @@ def pre_visualizar_ficheiro(file_url, ano):
 	ano = int(ano)
 
 	resultado = []
+	facturas_usadas = set()
 	for plano in ler_cashflow(_caminho_do_ficheiro(file_url), ano):
-		_resolver_facturas(plano)
+		_resolver_facturas(plano, facturas_usadas, ignorar_plano=nome_plano(plano["tipo"], ano, plano.get("mes")))
 		doc = frappe.get_doc(
 			{
 				"doctype": "Plano de Pagamentos",
@@ -187,18 +189,40 @@ def importar_ficheiro(file_url, ano, planos, substituir=None):
 	)
 
 
-def _resolver_facturas(plano):
-	"""Factura is a link to Purchase Invoice: numbers that don't exist in
-	ERPNext (or were cancelled) are kept in Observações instead."""
+def _resolver_facturas(plano, facturas_usadas, ignorar_plano=None):
+	"""Factura is a link to Purchase Invoice, used by one line only. Numbers
+	that don't exist in ERPNext (or were cancelled), or that another line
+	already uses (earlier in the file, or in another plan), are kept in
+	Observações instead."""
 	for linha in plano["linhas"]:
 		factura = linha.get("factura")
-		if not factura or factura_existe(factura):
+		if not factura:
 			continue
-		linha["observacoes"] = factura_para_observacoes(factura, linha.get("observacoes"), "não existe no ERPNext")
+		if not factura_existe(factura):
+			motivo, aviso = "não existe no ERPNext", "não existe no ERPNext"
+		elif factura in facturas_usadas or _factura_noutro_plano(factura, ignorar_plano):
+			motivo, aviso = "duplicada", "já está noutra linha"
+		else:
+			facturas_usadas.add(factura)
+			continue
+		linha["observacoes"] = factura_para_observacoes(factura, linha.get("observacoes"), motivo)
 		linha["factura"] = None
-		plano["avisos"].append(
-			f"{linha['descricao']}: factura {factura} não existe no ERPNext → guardada nas Observações"
+		plano["avisos"].append(f"{linha['descricao']}: factura {factura} {aviso} → guardada nas Observações")
+
+
+def _factura_noutro_plano(factura, ignorar_plano):
+	# The plan being replaced by this import doesn't count.
+	return bool(
+		frappe.db.sql(
+			"""
+			select 1 from `tabLinha do Plano de Pagamentos`
+			where factura = %s and parenttype = 'Plano de Pagamentos' and parent != %s
+				and estado not in ('Próximo Mês', 'Cancelado')
+			limit 1
+			""",
+			(factura, ignorar_plano or ""),
 		)
+	)
 
 
 def _caminho_do_ficheiro(file_url):

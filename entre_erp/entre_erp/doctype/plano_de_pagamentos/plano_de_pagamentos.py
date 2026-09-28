@@ -9,9 +9,11 @@ from entre_erp.pagamentos import (
 	ESTADO_PARCIAL,
 	ESTADO_PROXIMO_MES,
 	ESTADOS_FORA_DO_MES,
+	ESTADOS_INVESTIMENTO,
 	bloqueio_do_mes_anterior,
 	ligado,
 	linha_por_liquidar,
+	normalizar,
 	mes_anterior,
 	mes_seguinte,
 	nome_plano,
@@ -28,6 +30,8 @@ class PlanodePagamentos(Document):
 		self._validar_duplicado()
 		self.titulo = f"{self.mes} {self.ano}" if self.tipo == "Mensal" else f"Investimentos {self.ano}"
 		self._preencher_linhas()
+		self._validar_estados_investimento()
+		self._validar_facturas_duplicadas()
 		self._calcular_totais()
 		self._validar_mes_anterior_liquidado()
 		self._fechar_quando_liquidado()
@@ -56,8 +60,13 @@ class PlanodePagamentos(Document):
 	# ------------------------------------------------------------------
 
 	def adicionar_despesas_recorrentes(self):
-		"""Adds every active Despesa Recorrente not already in this plan."""
-		ja_no_plano = {row.despesa_recorrente for row in self.linhas if row.despesa_recorrente}
+		"""Adds every active Despesa Recorrente not already in this plan —
+		linked to it, or typed by hand with the same name. Lines carried over
+		from last month (Próximo Mês) belong to that month's bill, so they
+		don't stand in for this month's."""
+		proprias = [row for row in self.linhas if not row.linha_origem]
+		ja_no_plano = {row.despesa_recorrente for row in proprias if row.despesa_recorrente}
+		descricoes = {normalizar(row.descricao) for row in proprias}
 		despesas = frappe.get_all(
 			"Despesa Recorrente",
 			filters={"ativo": 1},
@@ -75,7 +84,7 @@ class PlanodePagamentos(Document):
 
 		adicionadas = 0
 		for d in despesas:
-			if d.name in ja_no_plano:
+			if d.name in ja_no_plano or normalizar(d.name) in descricoes:
 				continue
 			self.append(
 				"linhas",
@@ -284,6 +293,63 @@ class PlanodePagamentos(Document):
 			if row.despesa_recorrente and not row.categoria:
 				row.categoria = frappe.db.get_value("Despesa Recorrente", row.despesa_recorrente, "categoria")
 			self._registar_pagamento(row, estado_antes.get(row.name))
+
+	def _validar_estados_investimento(self):
+		"""Investimentos lists planned expenses; they are paid after being
+		moved to a month. Lines already paid there (history) stay as they are."""
+		if self.tipo != "Investimentos" or self.flags.importacao:
+			return
+		antes = self.get_doc_before_save()
+		estado_antes = {r.name: r.estado for r in (antes.linhas if antes else [])}
+		for row in self.linhas:
+			if row.estado in ESTADOS_INVESTIMENTO or estado_antes.get(row.name) == row.estado:
+				continue
+			frappe.throw(
+				_("{0}: nos Investimentos só se usa Pendente, Em Espera ou Cancelado. Para pagar, mova a linha para um mês (📅 Mês).").format(
+					frappe.bold(row.descricao)
+				),
+				title=_("Investimentos"),
+			)
+
+	def _validar_facturas_duplicadas(self):
+		"""A supplier invoice is paid by one line only. Lines in Próximo Mês
+		(their copy carries the invoice into next month) and Cancelado lines
+		don't count."""
+		if self.flags.importacao:
+			return
+		ativas = [r for r in self.linhas if r.factura and r.estado not in ESTADOS_FORA_DO_MES]
+		vistas = {}
+		for row in ativas:
+			if row.factura in vistas:
+				frappe.throw(
+					_("A factura {0} está em duas linhas deste plano: {1} e {2}.").format(
+						frappe.bold(row.factura), frappe.bold(vistas[row.factura]), frappe.bold(row.descricao)
+					),
+					title=_("Factura duplicada"),
+				)
+			vistas[row.factura] = row.descricao
+		if not vistas:
+			return
+
+		noutro_plano = frappe.db.sql(
+			"""
+			select l.factura, l.descricao, p.titulo
+			from `tabLinha do Plano de Pagamentos` l
+			join `tabPlano de Pagamentos` p on p.name = l.parent and l.parenttype = 'Plano de Pagamentos'
+			where l.factura in %(facturas)s and l.parent != %(plano)s and l.estado not in %(fora)s
+			limit 1
+			""",
+			{"facturas": tuple(vistas), "plano": self.name or "", "fora": ESTADOS_FORA_DO_MES},
+			as_dict=True,
+		)
+		if noutro_plano:
+			d = noutro_plano[0]
+			frappe.throw(
+				_("A factura {0} já está no plano {1} (linha {2}). Uma factura só pode ser paga por uma linha.").format(
+					frappe.bold(d.factura), frappe.bold(d.titulo), frappe.bold(d.descricao)
+				),
+				title=_("Factura duplicada"),
+			)
 
 	def _validar_facturas_rascunho(self, factura_antes):
 		if ligado("permitir_facturas_rascunho") or self.flags.importacao:

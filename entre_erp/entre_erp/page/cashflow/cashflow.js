@@ -69,7 +69,7 @@ const COLUNAS_PLANO = [
 	{ campo: "descricao", label: "Descrição", tipo: "text", largura: 260, fixa: true },
 	{ campo: "valor", label: "Valor", tipo: "num", largura: 120 },
 	{ campo: "prioridade", label: "Prior.", tipo: "select", largura: 90, filtro: true, opcoes: () => ["", "1", "2", "3", "4"] },
-	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, filtro: true, opcoes: () => ESTADOS },
+	{ campo: "estado", label: "Estado", tipo: "select", largura: 150, filtro: true, opcoes: (s) => estados_da_folha(s.doc) },
 	{ campo: "data_pretendida", label: "Data pretendida", tipo: "date", largura: 140 },
 	{ campo: "valor_pago", label: "Valor Pago", tipo: "num", largura: 120 },
 	{ campo: "data_pagamento", label: "Pago em", tipo: "date", largura: 140 },
@@ -133,6 +133,7 @@ class CashflowSheet {
 		this.filtros = {};
 		this.so_por_pagar = false;
 		this.so_em_atraso = false;
+		this.so_duplicados = false;
 		this.pesquisa = "";
 
 		inject_styles();
@@ -419,7 +420,8 @@ class CashflowSheet {
 				<button class="btn btn-primary cf-criar">${__("Criar plano")}</button>
 			</div>
 		`);
-		this.$conteudo.find(".cf-criar").on("click", () => {
+		this.$conteudo.find(".cf-criar").on("click", (e) => {
+			$(e.currentTarget).prop("disabled", true);
 			const tipo = aba === ABA_INVESTIMENTOS ? "Investimentos" : "Mensal";
 			frappe
 				.xcall(API + "criar_plano", { ano: this.ano, tipo, mes: tipo === "Mensal" ? aba : null })
@@ -427,7 +429,8 @@ class CashflowSheet {
 					this.planos[doc.name] = doc;
 					this.render_abas();
 					this.abrir_aba(aba);
-				});
+				})
+				.catch(() => $(e.currentTarget).prop("disabled", false));
 		});
 	}
 
@@ -470,6 +473,7 @@ class CashflowSheet {
 				<input type="text" class="form-control input-sm cf-pesquisa" placeholder="${__("Pesquisar...")}" value="${esc(this.pesquisa)}">
 				<button class="btn btn-default btn-sm cf-por-pagar" title="${__("Só o que falta pagar")}">${__("Por pagar")}</button>
 				<button class="btn btn-default btn-sm cf-em-atraso" title="${__("Data pretendida já passou e ainda não está liquidado")}">${__("Em atraso")} <span class="cf-atraso-n"></span></button>
+				<button class="btn btn-default btn-sm cf-duplicados" style="display:none" title="${__("Mesma descrição e mesmo valor neste mês")}">⚠ ${__("Possíveis duplicados")} <span class="cf-duplicados-n"></span></button>
 				<button class="btn btn-link btn-sm cf-limpar-filtros">✕ ${__("Limpar filtros")}</button>
 				<span class="cf-contagem text-muted"></span>
 				<div class="btn-group cf-colunas">
@@ -541,7 +545,7 @@ class CashflowSheet {
 		return `
 			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"} ${caixa_sem_reforco(row) ? "cf-caixa-sem-reforco" : ""}">
 				<td class="cf-idx"><span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
-				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura)}</td>`).join("")}
+				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura || this.campo_de_pagamento_bloqueado(c.campo))}</td>`).join("")}
 				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
 			</tr>`;
 	}
@@ -558,6 +562,13 @@ class CashflowSheet {
 		if (row.linha_origem) {
 			const [, mes] = mes_anterior(this.doc.ano, this.doc.mes);
 			html += `<button class="cf-salto" data-ir="anterior" title="${__("Veio de {0} (Próximo Mês)", [mes])}">← ${curto(mes)}</button>`;
+		}
+		if (row.movida_de) html += `<span class="cf-movida" title="${__("Movida de {0}", [esc(row.movida_de)])}">↩ ${esc(row.movida_de)}</span>`;
+		if (!so_leitura && !motivo_para_nao_mover(row, this.doc.tipo === "Mensal")) {
+			html +=
+				this.doc.tipo === "Investimentos"
+					? `<button class="cf-mover cf-mover-mes" title="${__("Mover para um mês, para ser paga lá")}">📅 ${__("Mês")}</button>`
+					: `<button class="cf-mover cf-mover-invest" title="${__("Estacionar nos Investimentos (despesa pontual)")}">💡</button>`;
 		}
 		if (!so_leitura) html += `<button class="btn btn-xs btn-link cf-remover" title="${__("Remover linha")}">×</button>`;
 		html += `<button class="btn btn-xs btn-link cf-abrir-painel" title="${__("Detalhes")}">›</button>`;
@@ -603,6 +614,7 @@ class CashflowSheet {
 		this.cabecalho = p;
 		this.atualizar_rodape();
 		this.marcar_atrasos();
+		this.marcar_duplicados();
 
 		// Keep the tab dot in sync.
 		const resumo = this.planos[p.name];
@@ -660,8 +672,10 @@ class CashflowSheet {
 		});
 
 		$c.on("keydown", ".cf-nova-input", (e) => {
+			if (e.key !== "Enter" || e.repeat) return;
 			const descricao = $(e.currentTarget).val().trim();
-			if (e.key !== "Enter" || !descricao) return;
+			if (!descricao) return;
+			$(e.currentTarget).val("");
 			this.guardar(() =>
 				frappe.xcall(API + "adicionar_linha", { plano: this.doc.name, descricao }).then((doc) => {
 					this.render_plano(doc);
@@ -692,6 +706,12 @@ class CashflowSheet {
 		});
 
 		$c.on("click", ".cf-abrir-painel", (e) => this.abrir_painel($(e.currentTarget).closest("tr").attr("data-name")));
+		$c.on("click", ".cf-mover-mes", (e) => this.mover_para_mes([$(e.currentTarget).closest("tr").attr("data-name")]));
+		$c.on("click", ".cf-mover-invest", (e) =>
+			this.mover_para_investimentos([$(e.currentTarget).closest("tr").attr("data-name")]),
+		);
+		$c.on("click", ".cf-lote-mover-mes", () => this.mover_para_mes([...this.selecionadas]));
+		$c.on("click", ".cf-lote-mover-invest", () => this.mover_para_investimentos([...this.selecionadas]));
 		$c.on("dblclick", "tbody .cf-idx", (e) => this.abrir_painel($(e.currentTarget).closest("tr").attr("data-name")));
 
 		$c.on("click", ".cf-salto-caixa", () => {
@@ -799,10 +819,15 @@ class CashflowSheet {
 			this.so_em_atraso = !this.so_em_atraso;
 			this.aplicar_filtros();
 		});
+		$c.on("click", ".cf-duplicados", () => {
+			this.so_duplicados = !this.so_duplicados;
+			this.aplicar_filtros();
+		});
 		$c.on("click", ".cf-limpar-filtros", () => {
 			this.filtros = {};
 			this.so_por_pagar = false;
 			this.so_em_atraso = false;
+			this.so_duplicados = false;
 			this.pesquisa = "";
 			$c.find(".cf-pesquisa").val("");
 			this.aplicar_filtros();
@@ -1028,13 +1053,18 @@ class CashflowSheet {
 
 		$barra.addClass("visivel").html(`
 			<span class="cf-lote-info"><b>${__("{0} selecionada(s)", [n])}</b> · ${dinheiro(total)}</span>
-			<button class="btn btn-primary btn-xs cf-lote-pagar">✓ ${__("Marcar como Pago")}</button>
-			${menu(__("Estado"), "estado", ESTADOS)}
+			${
+				this.doc.tipo === "Investimentos"
+					? `<button class="btn btn-primary btn-xs cf-lote-mover-mes">📅 ${__("Mover para mês…")}</button>`
+					: `<button class="btn btn-primary btn-xs cf-lote-pagar">✓ ${__("Marcar como Pago")}</button>`
+			}
+			${menu(__("Estado"), "estado", estados_da_folha(this.doc))}
 			${menu(__("Método"), "metodo_pagamento", [""].concat(this.metodos))}
 			${menu(__("Categoria"), "categoria", [""].concat(this.categorias))}
 			${menu(__("Prior."), "prioridade", ["", "1", "2", "3", "4"])}
 			<button class="btn btn-default btn-xs cf-lote-pretendida">${__("Data pretendida…")}</button>
-			<button class="btn btn-default btn-xs cf-lote-data">${__("Pago em…")}</button>
+			${this.doc.tipo === "Investimentos" ? "" : `<button class="btn btn-default btn-xs cf-lote-data">${__("Pago em…")}</button>`}
+			${this.doc.tipo === "Mensal" ? `<button class="btn btn-default btn-xs cf-lote-mover-invest">💡 ${__("Para Investimentos")}</button>` : ""}
 			<button class="btn btn-default btn-xs cf-lote-remover">${__("Remover")}</button>
 			<button class="btn btn-link btn-xs cf-lote-limpar" title="${__("Limpar seleção")}">✕</button>
 		`);
@@ -1129,6 +1159,13 @@ class CashflowSheet {
 					</div>
 				</div>
 				<div class="cf-painel-nav">
+					${
+						this.painel.so_leitura || motivo_para_nao_mover(l, this.doc.tipo === "Mensal")
+							? ""
+							: this.doc.tipo === "Investimentos"
+								? `<button class="btn btn-primary btn-xs cf-painel-mover-mes">📅 ${__("Mover para mês")}</button>`
+								: `<button class="btn btn-default btn-xs cf-painel-mover-invest" title="${__("Estacionar nos Investimentos")}">💡</button>`
+					}
 					<button class="btn btn-default btn-xs cf-painel-ant" ${pos <= 0 ? "disabled" : ""} title="${__("Linha anterior")} (↑)">‹</button>
 					<span class="text-muted">${pos + 1} / ${nomes.length}</span>
 					<button class="btn btn-default btn-xs cf-painel-seg" ${pos < 0 || pos >= nomes.length - 1 ? "disabled" : ""} title="${__("Linha seguinte")} (↓)">›</button>
@@ -1156,10 +1193,11 @@ class CashflowSheet {
 
 		const campo = (seccao, df) => this.criar_controlo(seccao, df, l);
 		campo("pagamento", { fieldname: "valor", label: __("Valor"), fieldtype: "Currency" });
-		campo("pagamento", { fieldname: "estado", label: __("Estado"), fieldtype: "Select", options: ESTADOS.join("\n") });
+		campo("pagamento", { fieldname: "estado", label: __("Estado"), fieldtype: "Select", options: estados_da_folha(this.doc).join("\n") });
 		campo("pagamento", { fieldname: "data_pretendida", label: __("Data pretendida"), fieldtype: "Date" });
-		campo("pagamento", { fieldname: "valor_pago", label: __("Valor Pago"), fieldtype: "Currency" });
-		campo("pagamento", { fieldname: "data_pagamento", label: __("Pago em"), fieldtype: "Date" });
+		const pagamento_bloqueado = this.doc.tipo === "Investimentos" ? 1 : 0;
+		campo("pagamento", { fieldname: "valor_pago", label: __("Valor Pago"), fieldtype: "Currency", read_only: pagamento_bloqueado });
+		campo("pagamento", { fieldname: "data_pagamento", label: __("Pago em"), fieldtype: "Date", read_only: pagamento_bloqueado });
 		campo("pagamento", { fieldname: "metodo_pagamento", label: __("Método"), fieldtype: "Select", options: [""].concat(this.metodos).join("\n") });
 		campo("pagamento", { fieldname: "prioridade", label: __("Prioridade"), fieldtype: "Select", options: "\n1\n2\n3\n4" });
 		campo("detalhes", { fieldname: "descricao", label: __("Descrição"), fieldtype: "Data" });
@@ -1179,6 +1217,8 @@ class CashflowSheet {
 		campo("observacoes", { fieldname: "observacoes", label: "", fieldtype: "Small Text" });
 
 		this.$painel.find(".cf-painel-fechar").on("click", () => this.fechar_painel());
+		this.$painel.find(".cf-painel-mover-mes").on("click", () => this.mover_para_mes([l.name]));
+		this.$painel.find(".cf-painel-mover-invest").on("click", () => this.mover_para_investimentos([l.name]));
 		this.$painel.find(".cf-painel-ant").on("click", () => this.mover_painel(-1));
 		this.$painel.find(".cf-painel-seg").on("click", () => this.mover_painel(1));
 		this.$painel.on("click", ".cf-painel-ir", (e) => {
@@ -1275,6 +1315,7 @@ class CashflowSheet {
 			`<a class="cf-painel-ir" data-ano="${l.ano}" data-mes="${esc(l.mes)}" data-linha="${esc(l.name)}">${texto}</a>`;
 		if (d.origem) itens.push(`← ${link(d.origem, __("Veio de {0}", [esc(d.origem.titulo)]))} <span class="text-muted">(${esc(d.origem.estado)})</span>`);
 		if (d.destino) itens.push(`→ ${link(d.destino, __("Movida para {0}", [esc(d.destino.titulo)]))} <span class="text-muted">(${esc(d.destino.estado)} · ${dinheiro(d.destino.valor)})</span>`);
+		if (d.linha.movida_de) itens.push(`↩ ${__("Movida de {0}", [esc(d.linha.movida_de)])}`);
 		if (d.caixa) itens.push(`💰 <a class="cf-painel-caixa">${__("Reforço na Caixa")}</a> <span class="text-muted">(${dinheiro(d.caixa.valor)} · ${frappe.datetime.str_to_user(d.caixa.data)})</span>`);
 		if (!itens.length) return "";
 		return `<div class="cf-painel-seccao"><div class="cf-painel-seccao-titulo">${__("Ligações")}</div>${itens.map((i) => `<div class="cf-painel-ligacao">${i}</div>`).join("")}</div>`;
@@ -1291,6 +1332,69 @@ class CashflowSheet {
 				</div>`,
 			)
 			.join("")}</div>`;
+	}
+
+	// Investimentos only plans: no paying there.
+	campo_de_pagamento_bloqueado(campo) {
+		return this.doc && this.doc.tipo === "Investimentos" && ["valor_pago", "data_pagamento"].includes(campo);
+	}
+
+	mover_para_mes(nomes) {
+		if (!nomes.length) return;
+		const hoje = new Date();
+		const d = new frappe.ui.Dialog({
+			title: nomes.length > 1 ? __("Mover {0} linhas para um mês", [nomes.length]) : __("Mover para um mês"),
+			fields: [
+				{ fieldname: "mes", fieldtype: "Select", label: __("Mês"), options: MESES.join("\n"), default: MESES[hoje.getMonth()], reqd: 1 },
+				{ fieldtype: "Column Break" },
+				{ fieldname: "ano", fieldtype: "Int", label: __("Ano"), default: hoje.getFullYear(), reqd: 1 },
+				{
+					fieldtype: "HTML",
+					options: `<p class="text-muted small">${__("A linha sai dos Investimentos e passa a ser paga nesse mês (como Pendente). O plano do mês é criado se ainda não existir.")}</p>`,
+				},
+			],
+			primary_action_label: __("Mover"),
+			primary_action: (v) => {
+				d.get_primary_btn().prop("disabled", true);
+				this.executar_movimento(nomes, { destino_ano: v.ano, destino_mes: v.mes })
+					.then(() => d.hide())
+					.catch(() => d.get_primary_btn().prop("disabled", false));
+			},
+		});
+		d.show();
+	}
+
+	mover_para_investimentos(nomes) {
+		if (!nomes.length) return;
+		frappe.confirm(
+			__("Mover {0} linha(s) para os Investimentos {1}? Ficam lá até as agendar para um mês.", [nomes.length, this.doc.ano]),
+			() => this.executar_movimento(nomes, { para_investimentos: 1 }),
+		);
+	}
+
+	executar_movimento(nomes, destino) {
+		return this.guardar(() =>
+			frappe.xcall(API + "mover_linhas", { plano: this.doc.name, linhas: nomes, ...destino }).then((r) => {
+				this.render_plano(r.origem);
+				const ir = r.destino.tipo === "Investimentos" ? ABA_INVESTIMENTOS : r.destino.mes;
+				const $alerta = frappe.show_alert(
+					{
+						message: `${__("{0} linha(s) movida(s) para {1}.", [r.novas.length, esc(r.destino.titulo)])}
+							<a class="cf-alerta-link">${__("Abrir")} →</a>`,
+						indicator: "green",
+					},
+					7,
+				);
+				$alerta &&
+					$alerta.find(".cf-alerta-link").on("click", () => this.ir_para(r.destino.ano, ir, `tr[data-name="${r.novas[0]}"]`));
+				// The destination plan may have just been created: refresh the tab dots.
+				frappe.xcall(API + "obter_ano", { ano: this.ano }).then((d) => {
+					d.planos.forEach((p) => (this.planos[p.name] = p));
+					this.render_abas();
+				});
+				return r;
+			}),
+		);
 	}
 
 	anunciar_fecho() {
@@ -1325,9 +1429,42 @@ class CashflowSheet {
 		this.$conteudo.find(".cf-atraso-n").text(n ? `(${n})` : "");
 	}
 
+	// Same description and same amount twice in this sheet. Only flagged:
+	// it can be right (two Caixa top-ups of 5.000 in one month). Lines
+	// carried from last month and Cancelado lines are left out.
+	marcar_duplicados() {
+		const grupos = new Map();
+		this.$conteudo.find("tbody tr").each((_i, tr) => {
+			const $tr = $(tr);
+			$tr.removeClass("cf-duplicado");
+			const valor = flt($tr.find('[data-campo="valor"]').val());
+			if (!valor || $tr.attr("data-origem") || $tr.find('[data-campo="estado"]').val() === "Cancelado") return;
+			const chave = `${normalizar($tr.find('[data-campo="descricao"]').val())}|${valor}`;
+			grupos.set(chave, (grupos.get(chave) || []).concat([$tr]));
+		});
+		let n = 0;
+		grupos.forEach((linhas) => {
+			if (linhas.length < 2) return;
+			n += linhas.length;
+			linhas.forEach(($tr) => $tr.addClass("cf-duplicado"));
+		});
+		this.$conteudo.find(".cf-duplicados").toggle(n > 0 || this.so_duplicados);
+		this.$conteudo.find(".cf-duplicados-n").text(n ? `(${n})` : "");
+		this.$conteudo
+			.find("tbody tr .cf-duplicado-aviso")
+			.remove();
+		this.$conteudo
+			.find("tbody tr.cf-duplicado .cf-idx")
+			.append(`<span class="cf-duplicado-aviso" title="${__("Possível duplicado: mesma descrição e mesmo valor noutra linha deste mês")}">⚠</span>`);
+	}
+
 	filtros_ativos() {
 		return (
-			Object.keys(this.filtros).length + (this.so_por_pagar ? 1 : 0) + (this.so_em_atraso ? 1 : 0) + (this.pesquisa ? 1 : 0)
+			Object.keys(this.filtros).length +
+			(this.so_por_pagar ? 1 : 0) +
+			(this.so_em_atraso ? 1 : 0) +
+			(this.so_duplicados ? 1 : 0) +
+			(this.pesquisa ? 1 : 0)
 		);
 	}
 
@@ -1345,6 +1482,7 @@ class CashflowSheet {
 				!this.so_por_pagar ||
 				(estado !== "Pago" && !ESTADOS_FORA_DO_MES.includes(estado) && !$tr.hasClass("cf-caixa-sem-reforco"));
 			if (this.so_em_atraso && !$tr.hasClass("cf-em-atraso-linha")) mostrar = false;
+			if (this.so_duplicados && !$tr.hasClass("cf-duplicado")) mostrar = false;
 			for (const [campo, aceites] of Object.entries(this.filtros)) {
 				if (!aceites.has(valor(campo))) mostrar = false;
 			}
@@ -1376,6 +1514,10 @@ class CashflowSheet {
 			.find(".cf-em-atraso")
 			.toggleClass("btn-danger", this.so_em_atraso)
 			.toggleClass("btn-default", !this.so_em_atraso);
+		this.$conteudo
+			.find(".cf-duplicados")
+			.toggleClass("btn-warning", this.so_duplicados)
+			.toggleClass("btn-default", !this.so_duplicados);
 		this.$conteudo.find(".cf-limpar-filtros").toggle(this.filtros_ativos() > 0);
 		this.$conteudo.find(".cf-contagem").text(__("{0} de {1} linhas", [visiveis, $linhas.length]));
 		this.atualizar_rodape();
@@ -1523,8 +1665,9 @@ class CashflowSheet {
 				if (!marcadas.length) return frappe.msgprint(__("Selecione pelo menos uma folha."));
 
 				const substituir = marcadas.filter((f) => f.existe).map((f) => f.nome);
-				const executar = () =>
-					frappe
+				const executar = () => {
+					d.get_primary_btn().prop("disabled", true);
+					return frappe
 						.xcall("entre_erp.importar_cashflow.importar_ficheiro", {
 							file_url,
 							ano: this.ano,
@@ -1539,7 +1682,9 @@ class CashflowSheet {
 								wide: true,
 							});
 							this.carregar_ano();
-						});
+						})
+						.catch(() => d.get_primary_btn().prop("disabled", false));
+				};
 
 				if (!substituir.length) return executar();
 				frappe.confirm(
@@ -1910,8 +2055,10 @@ class CashflowSheet {
 		});
 
 		$c.on("keydown", ".cf-nova-input", (e) => {
+			if (e.key !== "Enter" || e.repeat) return;
 			const descricao = $(e.currentTarget).val().trim();
-			if (e.key !== "Enter" || !descricao) return;
+			if (!descricao) return;
+			$(e.currentTarget).val("");
 			this.guardar(() =>
 				frappe
 					.xcall(API_CAIXA + "adicionar_movimento", { descricao, ...args() })
@@ -2005,8 +2152,10 @@ class CashflowSheet {
 			$(e.currentTarget).val(v ? dinheiro(v) : "");
 		});
 		$c.on("keydown", ".cf-nova-input", (e) => {
+			if (e.key !== "Enter" || e.repeat) return;
 			const despesa = $(e.currentTarget).val().trim();
-			if (e.key !== "Enter" || !despesa) return;
+			if (!despesa) return;
+			$(e.currentTarget).val("");
 			const categoria = this.categorias.includes("Outros") ? "Outros" : this.categorias[0];
 			this.guardar(() =>
 				frappe
@@ -2140,6 +2289,24 @@ function caixa_abaixo_do_aviso(saldo) {
 function definir_classe_estado($tr, estado) {
 	$tr.removeClass((_i, classes) => (classes.match(/cf-estado-\S+/g) || []).join(" "));
 	$tr.addClass(`cf-estado-${ESTADO_CLASS[estado] || "pendente"}`);
+}
+
+const ESTADOS_INVESTIMENTO = ["Pendente", "Em Espera", "Cancelado"];
+
+function estados_da_folha(doc) {
+	return doc && doc.tipo === "Investimentos" ? ESTADOS_INVESTIMENTO : ESTADOS;
+}
+
+// Same rule as entre_erp.pagamentos.motivo_para_nao_mover (a reason, or null).
+function motivo_para_nao_mover(row, para_investimentos) {
+	if (["Pago", "Parcialmente Pago"].includes(row.estado) || flt(row.valor_pago)) return __("já tem pagamento");
+	if (row.estado === "Próximo Mês") return __("está em Próximo Mês");
+	if (para_investimentos) {
+		if (row.despesa_recorrente) return __("é uma despesa fixa");
+		if (e_linha_de_caixa(row)) return __("é a linha da Caixa");
+		if (row.linha_origem) return __("veio do mês anterior");
+	}
+	return null;
 }
 
 function caixa_sem_reforco(row) {
@@ -2285,6 +2452,8 @@ function inject_styles() {
 		.cf-cell.cf-data::placeholder { color: var(--text-muted); opacity: 0.6; }
 		.cf-cell.cf-atrasado { color: var(--cf-vermelho) !important; font-weight: 600; }
 		.cf-atraso-n { font-weight: 600; }
+		.cf-grelha tbody tr.cf-duplicado > td { background: rgba(217, 119, 6, 0.08); }
+		.cf-duplicado-aviso { color: var(--cf-laranja); font-size: 11px; margin-left: 2px; }
 		/* Side panel */
 		.cf-painel {
 			position: fixed; right: 12px; width: 420px; z-index: 25;
@@ -2325,6 +2494,12 @@ function inject_styles() {
 		.cf-abrir-painel:hover { color: var(--primary); }
 
 		.cf-link-wrap { display: flex; align-items: center; }
+		.cf-mover {
+			font-size: 11px; padding: 1px 7px; margin-left: 4px; border-radius: 10px; white-space: nowrap;
+			border: 1px solid var(--cf-linha); background: var(--control-bg); color: var(--text-muted);
+		}
+		.cf-mover:hover { color: var(--primary); border-color: var(--primary); }
+		.cf-movida { font-size: 11px; margin-left: 4px; color: var(--text-muted); white-space: nowrap; }
 		.cf-salto-caixa, .cf-salto-plano {
 			font-size: 11px; padding: 1px 7px; margin-left: 4px; border-radius: 10px; white-space: nowrap;
 			border: 1px solid var(--cf-linha); background: var(--control-bg); color: var(--text-muted);
