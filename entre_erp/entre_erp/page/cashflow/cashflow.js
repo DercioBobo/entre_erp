@@ -561,7 +561,7 @@ class CashflowSheet {
 
 	html_linha(row, idx, so_leitura) {
 		return `
-			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" data-idx="${row.idx}" data-seccao="${e_fixa(row) ? "fixa" : "outra"}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"} ${e_fixa(row) ? "cf-linha-fixa" : ""} ${caixa_sem_reforco(row) ? "cf-caixa-sem-reforco" : ""}">
+			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" data-idx="${row.idx}" data-seccao="${e_fixa(row) ? "fixa" : "outra"}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"} ${caixa_sem_reforco(row) ? "cf-caixa-sem-reforco" : ""}">
 				<td class="cf-idx">${so_leitura ? "" : `<span class="cf-arrastar" title="${__("Arrastar para reordenar")}">⠿</span>`}<span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
 				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura || this.campo_de_pagamento_bloqueado(c.campo))}</td>`).join("")}
 				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
@@ -2409,7 +2409,7 @@ function ordenar_linhas(linhas) {
 }
 
 function html_seccao(seccao) {
-	const titulo = seccao === "fixa" ? `📌 ${__("Despesas fixas")}` : __("Outros pagamentos");
+	const titulo = seccao === "fixa" ? __("Despesas fixas") : __("Outros pagamentos");
 	return `<tr class="cf-seccao cf-seccao-${seccao}" data-seccao="${seccao}">
 		<td colspan="${COLUNAS_PLANO.length + 2}"><div class="cf-seccao-titulo">${titulo} <span class="cf-seccao-info"></span></div></td>
 	</tr>`;
@@ -2585,7 +2585,7 @@ function inject_styles() {
 		}
 		.cf-grelha .cf-fixa { position: sticky; left: 0; z-index: 1; }
 		.cf-grelha thead .cf-fixa { z-index: 3; }
-		.cf-grelha .cf-idx { width: 36px; text-align: center; color: var(--text-muted); font-size: 11px; padding: 0 4px; }
+		.cf-grelha .cf-idx { width: 40px; min-width: 40px; text-align: center; color: var(--text-muted); font-size: 11px; padding: 0 4px; }
 		/* Row number turns into a checkbox on hover / while selecting */
 		.cf-idx .cf-sel { display: none; margin: 0; vertical-align: middle; }
 		.cf-grelha tbody tr[data-name]:hover .cf-sel, .cf-selecionando .cf-sel { display: inline-block; }
@@ -2597,18 +2597,23 @@ function inject_styles() {
 		.cf-atraso-n { font-weight: 600; }
 		.cf-grelha tbody tr[data-name].cf-duplicado > td { background: rgba(217, 119, 6, 0.08); }
 		.cf-duplicado-aviso { color: var(--cf-laranja); font-size: 11px; margin-left: 2px; }
-		/* Fixed expenses (Despesas Recorrentes): light violet tint + section headers */
-		.cf-grelha tr.cf-linha-fixa > td { background: color-mix(in srgb, var(--fg-color) 93%, #8b5cf6); }
-		.cf-grelha tr.cf-seccao > td { padding: 0; background: var(--subtle-fg, var(--bg-color)); }
-		.cf-grelha tr.cf-seccao-fixa > td { background: color-mix(in srgb, var(--fg-color) 84%, #8b5cf6); }
+		/* Section headers (Despesas fixas / Outros pagamentos): neutral band, no row tint */
+		.cf-grelha tr.cf-seccao > td {
+			padding: 0; background: var(--subtle-fg, var(--bg-color));
+			border-top: 1px solid var(--cf-linha); border-right: 0;
+		}
 		.cf-seccao-titulo {
-			position: sticky; left: 0; display: inline-block; padding: 5px 10px;
-			font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-color);
+			position: sticky; left: 0; display: inline-block; padding: 6px 12px;
+			font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-color);
 		}
 		.cf-seccao-info { margin-left: 8px; font-weight: normal; text-transform: none; letter-spacing: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-		/* Drag handle, shown on hover next to the checkbox */
-		.cf-arrastar { display: none; cursor: grab; margin-right: 3px; font-size: 12px; color: var(--text-muted); user-select: none; }
-		.cf-grelha tbody tr[data-name]:hover .cf-arrastar { display: inline; }
+		/* Drag handle: always takes its space (absolutely placed), only fades in on hover — no layout shift */
+		.cf-grelha tbody .cf-idx { position: relative; }
+		.cf-arrastar {
+			position: absolute; left: 1px; top: 50%; transform: translateY(-50%);
+			opacity: 0; cursor: grab; font-size: 12px; line-height: 1; color: var(--text-muted); user-select: none;
+		}
+		.cf-grelha tbody tr[data-name]:hover .cf-arrastar { opacity: 1; }
 		.cf-arrastar:hover { color: var(--primary); }
 		.cf-arrastar-fantasma > td { background: rgba(59, 130, 246, 0.18) !important; }
 		/* Side panel */
