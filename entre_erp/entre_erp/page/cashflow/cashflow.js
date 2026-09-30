@@ -2280,12 +2280,15 @@ class CashflowSheet {
 		$c.on("click", ".cf-remover", (e) => {
 			const name = $(e.currentTarget).closest("tr").attr("data-name");
 			frappe.confirm(
-				__("Remover {0}? Se já foi usada em planos, desmarque Ativo em vez de remover.", [`<b>${esc(name)}</b>`]),
+				__("Remover {0}? Deixa de ser copiada para os próximos meses. As linhas que já estão nos planos ficam, mas passam para Outros pagamentos. Para só a pausar, desmarque Ativo.", [
+					`<b>${esc(name)}</b>`,
+				]),
 				() =>
 					this.guardar(() =>
-						frappe
-							.xcall("frappe.client.delete", { doctype: "Despesa Recorrente", name })
-							.then(() => this.carregar_recorrentes()),
+						frappe.xcall(API + "remover_despesa_recorrente", { nome: name }).then((n) => {
+							frappe.show_alert({ message: __("{0} removida.", [esc(name)]) + (n ? " " + __("{0} linha(s) de planos desligada(s).", [n]) : ""), indicator: "green" });
+							this.carregar_recorrentes();
+						}),
 					),
 			);
 		});

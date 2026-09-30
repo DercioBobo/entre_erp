@@ -300,6 +300,25 @@ def reordenar_linhas(plano, linhas):
 
 
 @frappe.whitelist()
+def remover_despesa_recorrente(nome):
+	"""Deletes a recurring expense even if plans already used it: those lines
+	stay (they're history) but lose the link, so they stop counting as fixed.
+	A plain delete would fail on the link from the plan lines."""
+	frappe.has_permission("Despesa Recorrente", "delete", nome, throw=True)
+	if nome == despesa_caixa():
+		frappe.throw(
+			_("{0} é a despesa da Caixa nas Definições do Cashflow — escolha outra lá antes de a remover.").format(nome)
+		)
+	linhas = frappe.db.count("Linha do Plano de Pagamentos", {"despesa_recorrente": nome})
+	if linhas:
+		frappe.db.set_value(
+			"Linha do Plano de Pagamentos", {"despesa_recorrente": nome}, "despesa_recorrente", None, update_modified=False
+		)
+	frappe.delete_doc("Despesa Recorrente", nome)
+	return linhas
+
+
+@frappe.whitelist()
 def remover_linha(plano, linha):
 	return remover_linhas(plano, [linha])
 
