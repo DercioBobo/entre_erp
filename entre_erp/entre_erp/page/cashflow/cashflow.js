@@ -335,7 +335,7 @@ class CashflowSheet {
 
 		return {
 			colunas,
-			linhas: $tabela.find("tbody tr:visible").map((_i, tr) => [ler_linha(tr)]).get(),
+			linhas: $tabela.find("tbody tr[data-name]:visible").map((_i, tr) => [ler_linha(tr)]).get(),
 			totais: $tabela.find("tfoot tr.cf-total:visible").map((_i, tr) => [ler_linha(tr)]).get(),
 		};
 	}
@@ -510,7 +510,7 @@ class CashflowSheet {
 						).join("")}
 						<th style="min-width:110px"></th>
 					</tr></thead>
-					<tbody>${doc.linhas.map((row, i) => this.html_linha(row, i + 1, so_leitura)).join("")}</tbody>
+					<tbody>${this.html_corpo(doc.linhas, so_leitura)}</tbody>
 					<tfoot>
 						${
 							so_leitura
@@ -534,6 +534,7 @@ class CashflowSheet {
 
 		this.render_cabecalho(doc);
 		this.bind_plano();
+		this.ativar_arrastar(so_leitura);
 		this.destacar_linha();
 		if (this.painel) {
 			if (this.$conteudo.find(`tbody tr[data-name="${this.painel.nome}"]`).length) this.abrir_painel(this.painel.nome);
@@ -541,10 +542,27 @@ class CashflowSheet {
 		}
 	}
 
+	// Fixed expenses (from Despesas Recorrentes) first, then the rest; inside
+	// each section what's still to pay stays on top and settled lines sink.
+	// Only a sheet that has both kinds gets section headers.
+	html_corpo(linhas, so_leitura) {
+		const ordenadas = ordenar_linhas(linhas);
+		const com_seccoes = ordenadas.some(e_fixa) && !ordenadas.every(e_fixa);
+		let html = "";
+		let seccao = null;
+		ordenadas.forEach((row, i) => {
+			const s = e_fixa(row) ? "fixa" : "outra";
+			if (com_seccoes && s !== seccao) html += html_seccao(s);
+			seccao = s;
+			html += this.html_linha(row, i + 1, so_leitura);
+		});
+		return html;
+	}
+
 	html_linha(row, idx, so_leitura) {
 		return `
-			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"} ${caixa_sem_reforco(row) ? "cf-caixa-sem-reforco" : ""}">
-				<td class="cf-idx"><span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
+			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" data-idx="${row.idx}" data-seccao="${e_fixa(row) ? "fixa" : "outra"}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"} ${e_fixa(row) ? "cf-linha-fixa" : ""} ${caixa_sem_reforco(row) ? "cf-caixa-sem-reforco" : ""}">
+				<td class="cf-idx">${so_leitura ? "" : `<span class="cf-arrastar" title="${__("Arrastar para reordenar")}">⠿</span>`}<span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
 				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura || this.campo_de_pagamento_bloqueado(c.campo))}</td>`).join("")}
 				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
 			</tr>`;
@@ -648,7 +666,7 @@ class CashflowSheet {
 			e.preventDefault();
 			// Excel-like: Enter goes to the same column on the next row.
 			const campo = $(e.currentTarget).attr("data-campo");
-			const $prox = $(e.currentTarget).closest("tr").nextAll(":visible").first();
+			const $prox = $(e.currentTarget).closest("tr").nextAll("[data-name]:visible").first();
 			const $alvo = $prox.length ? $prox.find(`[data-campo="${campo}"]`) : $c.find(".cf-nova-input");
 			($alvo.length ? $alvo : $(e.currentTarget)).trigger("focus").trigger("select");
 		});
@@ -679,7 +697,9 @@ class CashflowSheet {
 			this.guardar(() =>
 				frappe.xcall(API + "adicionar_linha", { plano: this.doc.name, descricao }).then((doc) => {
 					this.render_plano(doc);
-					this.$conteudo.find('tbody tr:last [data-campo="valor"]').trigger("focus");
+					// Sorting puts the new line at the end of what's still to pay, not at the bottom.
+					const nova = doc.linhas[doc.linhas.length - 1];
+					this.$conteudo.find(`tbody tr[data-name="${nova.name}"] [data-campo="valor"]`).trigger("focus");
 				}),
 			);
 		});
@@ -743,7 +763,7 @@ class CashflowSheet {
 		});
 		$c.on("change", ".cf-sel-todas", (e) => {
 			const marcar = e.currentTarget.checked;
-			$c.find("tbody tr:visible").each((_i, tr) => {
+			$c.find("tbody tr[data-name]:visible").each((_i, tr) => {
 				$(tr).toggleClass("cf-selecionada", marcar).find(".cf-sel").prop("checked", marcar);
 				if (marcar) this.selecionadas.add(tr.getAttribute("data-name"));
 				else this.selecionadas.delete(tr.getAttribute("data-name"));
@@ -947,6 +967,7 @@ class CashflowSheet {
 				.xcall(API + "atualizar_linha", { plano: this.doc.name, linha: nome, campo, valor })
 				.then((r) => {
 					this.atualizar_linha_na_grelha(this.$conteudo.find(`tbody tr[data-name="${nome}"]`), r.linha);
+					this.ordenar_grelha(nome);
 					this.render_cabecalho(r.plano);
 					if (this.painel && this.painel.nome === nome) this.atualizar_painel(r.linha, campo);
 					if (r.transporte) this.anunciar_transporte(r.transporte, r.linha.name);
@@ -964,6 +985,98 @@ class CashflowSheet {
 			if (el === document.activeElement) return;
 			const coluna = COLUNAS_PLANO.find((c) => c.campo === el.getAttribute("data-campo"));
 			escrever_celula(coluna, $(el), linha[coluna.campo]);
+		});
+	}
+
+	// ------------------------------------------------------------------
+	// Order: sections, paid lines at the bottom, drag to reorder
+	// ------------------------------------------------------------------
+
+	// Re-sorts the drawn rows after an edit (e.g. a line just became Pago)
+	// without redrawing, and flashes `nome` if it moved.
+	ordenar_grelha(nome) {
+		const tbody = this.$conteudo.find(".cf-grelha tbody")[0];
+		if (!tbody) return;
+		const atuais = [...tbody.querySelectorAll("tr[data-name]")];
+		const ordem = atuais
+			.map((tr, i) => ({ tr, i, chave: chave_ordem(tr.dataset.seccao === "fixa", ler_estado(tr), cint(tr.dataset.idx)) }))
+			.sort((a, b) => comparar_chaves(a.chave, b.chave) || a.i - b.i)
+			.map((o) => o.tr);
+		if (ordem.every((tr, i) => tr === atuais[i])) return;
+
+		const foco = document.activeElement;
+		const cabecalhos = {};
+		tbody.querySelectorAll("tr.cf-seccao").forEach((tr) => (cabecalhos[tr.dataset.seccao] = tr));
+		ordem.forEach((tr) => {
+			const cab = cabecalhos[tr.dataset.seccao];
+			if (cab) {
+				tbody.appendChild(cab);
+				delete cabecalhos[tr.dataset.seccao];
+			}
+			tbody.appendChild(tr);
+		});
+		if (foco && foco !== document.activeElement && document.body.contains(foco)) foco.focus();
+		this.numerar_linhas();
+
+		const $tr = $(tbody).find(`tr[data-name="${nome}"]`);
+		if (nome && $tr.index() !== atuais.findIndex((tr) => tr.dataset.name === nome)) {
+			$tr.addClass("cf-destaque");
+			setTimeout(() => $tr.removeClass("cf-destaque"), 1600);
+		}
+	}
+
+	numerar_linhas() {
+		this.$conteudo.find("tbody tr[data-name] .cf-n").each((i, el) => (el.textContent = i + 1));
+	}
+
+	ativar_arrastar(so_leitura) {
+		if (this.sortable) this.sortable.destroy();
+		this.sortable = null;
+		const tbody = this.$conteudo.find(".cf-grelha tbody")[0];
+		if (so_leitura || !tbody || typeof Sortable === "undefined") return;
+
+		// A line can only move inside its own block (fixed / other × to pay / settled),
+		// since the automatic order would put it back anyway.
+		const grupo = (tr) => `${tr.dataset.seccao}|${ESTADOS_NO_FUNDO.includes(ler_estado(tr)) ? 1 : 0}`;
+		this.sortable = new Sortable(tbody, {
+			handle: ".cf-arrastar",
+			draggable: "tr[data-name]",
+			animation: 150,
+			ghostClass: "cf-arrastar-fantasma",
+			onMove: (evt) => !!evt.related.dataset.name && grupo(evt.dragged) === grupo(evt.related),
+			onEnd: (evt) => {
+				if (evt.oldIndex !== evt.newIndex) this.guardar_ordem();
+			},
+		});
+	}
+
+	guardar_ordem() {
+		const nomes = this.$conteudo
+			.find("tbody tr[data-name]")
+			.map((i, tr) => {
+				tr.dataset.idx = i + 1;
+				return tr.dataset.name;
+			})
+			.get();
+		this.numerar_linhas();
+		this.guardar(() => frappe.xcall(API + "reordenar_linhas", { plano: this.doc.name, linhas: nomes }));
+	}
+
+	// Section header: row count and what's still to pay among the visible lines.
+	atualizar_seccoes() {
+		this.$conteudo.find("tbody tr.cf-seccao").each((_i, cab) => {
+			const $linhas = this.$conteudo.find(`tbody tr[data-name][data-seccao="${cab.dataset.seccao}"]:visible`);
+			let falta = 0;
+			$linhas.each((_j, tr) => {
+				const estado = ler_estado(tr);
+				if (estado === "Pago" || ESTADOS_FORA_DO_MES.includes(estado) || tr.classList.contains("cf-caixa-sem-reforco")) return;
+				const $tr = $(tr);
+				falta += Math.max(0, flt($tr.find('[data-campo="valor"]').val()) - flt($tr.find('[data-campo="valor_pago"]').val()));
+			});
+			$(cab)
+				.toggle($linhas.length > 0)
+				.find(".cf-seccao-info")
+				.text(`${__("{0} linha(s)", [$linhas.length])} · ${__("Por pagar")} ${dinheiro(falta)}`);
 		});
 	}
 
@@ -1027,7 +1140,7 @@ class CashflowSheet {
 		const $barra = this.$conteudo.find(".cf-lote");
 		this.$conteudo.find(".cf-grelha").toggleClass("cf-selecionando", n > 0);
 		const $todas = this.$conteudo.find(".cf-sel-todas");
-		const visiveis = this.$conteudo.find("tbody tr:visible").length;
+		const visiveis = this.$conteudo.find("tbody tr[data-name]:visible").length;
 		$todas.prop("checked", n > 0 && n === visiveis).prop("indeterminate", n > 0 && n < visiveis);
 		if (!n) {
 			$barra.removeClass("visivel").empty();
@@ -1095,7 +1208,7 @@ class CashflowSheet {
 		const so_leitura = this.doc.estado === "Fechado" || !!this.doc.bloqueio;
 		this.painel = { nome, so_leitura, controlos: {} };
 
-		this.$conteudo.find("tbody tr").removeClass("cf-painel-ativo");
+		this.$conteudo.find("tbody tr[data-name]").removeClass("cf-painel-ativo");
 		this.$conteudo.find(`tbody tr[data-name="${nome}"]`).addClass("cf-painel-ativo");
 		this.$body.find(".cf-sheet").addClass("cf-com-painel");
 
@@ -1117,11 +1230,11 @@ class CashflowSheet {
 		this.$painel = null;
 		$(document).off("keydown.cf-painel");
 		this.$body.find(".cf-sheet").removeClass("cf-com-painel");
-		if (this.$conteudo) this.$conteudo.find("tbody tr").removeClass("cf-painel-ativo");
+		if (this.$conteudo) this.$conteudo.find("tbody tr[data-name]").removeClass("cf-painel-ativo");
 	}
 
 	linhas_visiveis() {
-		return this.$conteudo.find("tbody tr:visible").map((_i, tr) => tr.getAttribute("data-name")).get();
+		return this.$conteudo.find("tbody tr[data-name]:visible").map((_i, tr) => tr.getAttribute("data-name")).get();
 	}
 
 	mover_painel(delta) {
@@ -1415,7 +1528,7 @@ class CashflowSheet {
 	marcar_atrasos() {
 		const hoje = frappe.datetime.get_today();
 		let n = 0;
-		this.$conteudo.find("tbody tr").each((_i, tr) => {
+		this.$conteudo.find("tbody tr[data-name]").each((_i, tr) => {
 			const $tr = $(tr);
 			const $data = $tr.find('[data-campo="data_pretendida"]');
 			const data = $data.length ? $data[0].dataset.iso : "";
@@ -1434,7 +1547,7 @@ class CashflowSheet {
 	// carried from last month and Cancelado lines are left out.
 	marcar_duplicados() {
 		const grupos = new Map();
-		this.$conteudo.find("tbody tr").each((_i, tr) => {
+		this.$conteudo.find("tbody tr[data-name]").each((_i, tr) => {
 			const $tr = $(tr);
 			$tr.removeClass("cf-duplicado");
 			const valor = flt($tr.find('[data-campo="valor"]').val());
@@ -1451,10 +1564,10 @@ class CashflowSheet {
 		this.$conteudo.find(".cf-duplicados").toggle(n > 0 || this.so_duplicados);
 		this.$conteudo.find(".cf-duplicados-n").text(n ? `(${n})` : "");
 		this.$conteudo
-			.find("tbody tr .cf-duplicado-aviso")
+			.find("tbody tr[data-name] .cf-duplicado-aviso")
 			.remove();
 		this.$conteudo
-			.find("tbody tr.cf-duplicado .cf-idx")
+			.find("tbody tr[data-name].cf-duplicado .cf-idx")
 			.append(`<span class="cf-duplicado-aviso" title="${__("Possível duplicado: mesma descrição e mesmo valor noutra linha deste mês")}">⚠</span>`);
 	}
 
@@ -1471,7 +1584,7 @@ class CashflowSheet {
 	aplicar_filtros() {
 		const txt = (this.pesquisa || "").toLowerCase();
 		let visiveis = 0;
-		const $linhas = this.$conteudo.find("tbody tr");
+		const $linhas = this.$conteudo.find("tbody tr[data-name]");
 
 		$linhas.each((_i, tr) => {
 			const $tr = $(tr);
@@ -1526,6 +1639,7 @@ class CashflowSheet {
 	// TOTAL row: the plan totals, or — while filtering — the total of the
 	// visible lines only (like Excel's SUBTOTAL on a filtered table).
 	atualizar_rodape() {
+		this.atualizar_seccoes();
 		const $valor = this.$conteudo.find(".cf-total-valor");
 		const $pago = this.$conteudo.find(".cf-total-pago");
 		const $label = this.$conteudo.find(".cf-total-label");
@@ -1539,7 +1653,7 @@ class CashflowSheet {
 
 		let total = 0;
 		let pago = 0;
-		this.$conteudo.find("tbody tr:visible").each((_i, tr) => {
+		this.$conteudo.find("tbody tr[data-name]:visible").each((_i, tr) => {
 			const $tr = $(tr);
 			const valor_pago = flt($tr.find('[data-campo="valor_pago"]').val());
 			const estado = $tr.find('[data-campo="estado"]').val();
@@ -1980,7 +2094,7 @@ class CashflowSheet {
 	// Running balance, top to bottom, starting from the month's opening balance.
 	recalcular_saldos_caixa() {
 		let saldo = this.caixa.resumo.saldo_inicial;
-		this.$conteudo.find("tbody tr").each((_i, tr) => {
+		this.$conteudo.find("tbody tr[data-name]").each((_i, tr) => {
 			const $tr = $(tr);
 			const valor = flt($tr.find('[data-campo="valor"]').val());
 			const reforco = $tr.find('[data-campo="tipo"]').val() === "Reforço";
@@ -2272,6 +2386,35 @@ const normalizar = (texto) =>
 	(texto || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 // Same rule as entre_erp.pagamentos.e_linha_de_caixa
+// Settled for this month: sinks to the bottom of its section.
+const ESTADOS_NO_FUNDO = ["Pago", "Cancelado", "Próximo Mês"];
+
+// A fixed expense = a line that came from a Despesa Recorrente.
+const e_fixa = (row) => !!row.despesa_recorrente;
+
+const ler_estado = (tr) => $(tr).find('[data-campo="estado"]').val();
+
+const chave_ordem = (fixa, estado, idx) => [fixa ? 0 : 1, ESTADOS_NO_FUNDO.includes(estado) ? 1 : 0, idx];
+
+function comparar_chaves(a, b) {
+	for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i];
+	return 0;
+}
+
+function ordenar_linhas(linhas) {
+	return linhas
+		.map((row, i) => ({ row, i, chave: chave_ordem(e_fixa(row), row.estado, cint(row.idx)) }))
+		.sort((a, b) => comparar_chaves(a.chave, b.chave) || a.i - b.i)
+		.map((o) => o.row);
+}
+
+function html_seccao(seccao) {
+	const titulo = seccao === "fixa" ? `📌 ${__("Despesas fixas")}` : __("Outros pagamentos");
+	return `<tr class="cf-seccao cf-seccao-${seccao}" data-seccao="${seccao}">
+		<td colspan="${COLUNAS_PLANO.length + 2}"><div class="cf-seccao-titulo">${titulo} <span class="cf-seccao-info"></span></div></td>
+	</tr>`;
+}
+
 function e_linha_de_caixa(row) {
 	const nome = DEFINICOES.despesa_caixa || "Caixa";
 	if (row.despesa_recorrente === nome) return true;
@@ -2445,15 +2588,29 @@ function inject_styles() {
 		.cf-grelha .cf-idx { width: 36px; text-align: center; color: var(--text-muted); font-size: 11px; padding: 0 4px; }
 		/* Row number turns into a checkbox on hover / while selecting */
 		.cf-idx .cf-sel { display: none; margin: 0; vertical-align: middle; }
-		.cf-grelha tbody tr:hover .cf-sel, .cf-selecionando .cf-sel { display: inline-block; }
-		.cf-grelha tbody tr:hover .cf-idx .cf-n:not(:only-child), .cf-selecionando .cf-idx .cf-n { display: none; }
+		.cf-grelha tbody tr[data-name]:hover .cf-sel, .cf-selecionando .cf-sel { display: inline-block; }
+		.cf-grelha tbody tr[data-name]:hover .cf-idx .cf-n:not(:only-child), .cf-selecionando .cf-idx .cf-n { display: none; }
 		.cf-idx .cf-sel-todas { margin: 0; vertical-align: middle; }
-		.cf-grelha tbody tr.cf-selecionada > td { background: rgba(59, 130, 246, 0.1); }
+		.cf-grelha tbody tr[data-name].cf-selecionada > td { background: rgba(59, 130, 246, 0.1); }
 		.cf-cell.cf-data::placeholder { color: var(--text-muted); opacity: 0.6; }
 		.cf-cell.cf-atrasado { color: var(--cf-vermelho) !important; font-weight: 600; }
 		.cf-atraso-n { font-weight: 600; }
-		.cf-grelha tbody tr.cf-duplicado > td { background: rgba(217, 119, 6, 0.08); }
+		.cf-grelha tbody tr[data-name].cf-duplicado > td { background: rgba(217, 119, 6, 0.08); }
 		.cf-duplicado-aviso { color: var(--cf-laranja); font-size: 11px; margin-left: 2px; }
+		/* Fixed expenses (Despesas Recorrentes): light violet tint + section headers */
+		.cf-grelha tr.cf-linha-fixa > td { background: color-mix(in srgb, var(--fg-color) 93%, #8b5cf6); }
+		.cf-grelha tr.cf-seccao > td { padding: 0; background: var(--subtle-fg, var(--bg-color)); }
+		.cf-grelha tr.cf-seccao-fixa > td { background: color-mix(in srgb, var(--fg-color) 84%, #8b5cf6); }
+		.cf-seccao-titulo {
+			position: sticky; left: 0; display: inline-block; padding: 5px 10px;
+			font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-color);
+		}
+		.cf-seccao-info { margin-left: 8px; font-weight: normal; text-transform: none; letter-spacing: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+		/* Drag handle, shown on hover next to the checkbox */
+		.cf-arrastar { display: none; cursor: grab; margin-right: 3px; font-size: 12px; color: var(--text-muted); user-select: none; }
+		.cf-grelha tbody tr[data-name]:hover .cf-arrastar { display: inline; }
+		.cf-arrastar:hover { color: var(--primary); }
+		.cf-arrastar-fantasma > td { background: rgba(59, 130, 246, 0.18) !important; }
 		/* Side panel */
 		.cf-painel {
 			position: fixed; right: 12px; width: 420px; z-index: 25;
@@ -2489,7 +2646,7 @@ function inject_styles() {
 		.cf-painel-evento { font-size: 12px; padding: 5px 0; border-bottom: 1px dashed var(--cf-linha); }
 		.cf-painel-evento:last-child { border-bottom: 0; }
 		.cf-painel-vazio { font-size: 12px; padding-bottom: 8px; }
-		.cf-grelha tbody tr.cf-painel-ativo > td { background: rgba(59, 130, 246, 0.14); }
+		.cf-grelha tbody tr[data-name].cf-painel-ativo > td { background: rgba(59, 130, 246, 0.14); }
 		.cf-abrir-painel { font-size: 16px; line-height: 1; padding: 0 6px; color: var(--text-muted); }
 		.cf-abrir-painel:hover { color: var(--primary); }
 
@@ -2560,7 +2717,7 @@ function inject_styles() {
 		.cf-cell.cf-check { width: auto; height: auto; margin: 8px auto; display: block; }
 
 		/* Row tint by Estado — the left bar is the main cue, readable in both themes. */
-		.cf-grelha tbody tr > td:first-child { box-shadow: inset 3px 0 0 transparent; }
+		.cf-grelha tbody tr[data-name] > td:first-child { box-shadow: inset 3px 0 0 transparent; }
 		.cf-estado-pago > td:first-child { box-shadow: inset 3px 0 0 var(--cf-verde) !important; }
 		.cf-estado-pago [data-campo="estado"] { color: var(--cf-verde); font-weight: 600; }
 		.cf-estado-parcial > td:first-child, .cf-estado-reservado > td:first-child,

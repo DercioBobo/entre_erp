@@ -287,6 +287,19 @@ def adicionar_linha(plano, descricao):
 
 
 @frappe.whitelist()
+def reordenar_linhas(plano, linhas):
+	"""Drag & drop on the sheet: saves the new line order (idx) only — no
+	full save, so it doesn't touch totals, history or auto-closing."""
+	doc = _plano_editavel(plano)
+	ordem = {nome: i for i, nome in enumerate(frappe.parse_json(linhas))}
+	# Lines not sent (someone else added one meanwhile) keep their relative order at the end.
+	linhas_ordenadas = sorted(doc.linhas, key=lambda r: (ordem.get(r.name, len(ordem)), r.idx))
+	for idx, row in enumerate(linhas_ordenadas, start=1):
+		if row.idx != idx:
+			frappe.db.set_value(row.doctype, row.name, "idx", idx, update_modified=False)
+
+
+@frappe.whitelist()
 def remover_linha(plano, linha):
 	return remover_linhas(plano, [linha])
 
