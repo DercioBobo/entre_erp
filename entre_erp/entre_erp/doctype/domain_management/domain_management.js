@@ -39,5 +39,26 @@ frappe.ui.form.on("Domain Management", {
 				freeze_message: __("A consultar o registo..."),
 			}).then(() => frm.reload_doc());
 		});
+
+		const em_aberto = ["Pendente", "Pago"].includes(frm.doc.renovacao_estado);
+		if (em_aberto) {
+			frm.add_custom_button(__("Abrir renovação"), () =>
+				frappe.set_route("Form", "Domain Renewal", frm.doc.renovacao_actual)
+			).addClass("btn-primary");
+		} else if (frm.doc.estado !== "Cancelado") {
+			frm.add_custom_button(__("Nova renovação"), () =>
+				frm.call({ method: "abrir_renovacao", doc: frm.doc }).then(({ message }) =>
+					frappe.set_route("Form", "Domain Renewal", message)
+				)
+			);
+		}
+
+		if (frm.doc.password) {
+			frm.add_custom_button(__("Ver password"), () =>
+				frm.call({ method: "ver_password", doc: frm.doc }).then(({ message }) =>
+					frappe.msgprint({ title: __("Password"), message: frappe.utils.escape_html(message || "") })
+				)
+			);
+		}
 	},
 });

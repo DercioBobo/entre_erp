@@ -8,7 +8,7 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "status",
+  "estado",
   "nome_do_dominio",
   "customer",
   "email",
@@ -24,6 +24,11 @@
   "data_de_inicio",
   "data_de_fim",
   "comprovativo",
+  "section_renovacao",
+  "renovacao_actual",
+  "column_break_renovacao",
+  "renovacao_estado",
+  "ultima_renovacao",
   "credencial_column",
   "link",
   "username",
@@ -42,13 +47,14 @@
  ],
  "fields": [
   {
-   "doctype": "DocField",
-   "fieldname": "status",
+   "default": "Ativo",
+   "description": "Passa a Expirado sozinho quando a data do registo passa; volta a Ativo quando é renovado.",
+   "fieldname": "estado",
    "fieldtype": "Select",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Status",
-   "options": "\nAtivo\nInativo\nPago\nNão Pago"
+   "label": "Estado",
+   "options": "Ativo\nExpirado\nCancelado"
   },
   {
    "doctype": "DocField",
@@ -162,6 +168,40 @@
    "label": "Comprovativo"
   },
   {
+   "fieldname": "section_renovacao",
+   "fieldtype": "Section Break",
+   "label": "Renovação"
+  },
+  {
+   "fieldname": "renovacao_actual",
+   "fieldtype": "Link",
+   "label": "Renovação actual",
+   "no_copy": 1,
+   "options": "Domain Renewal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_renovacao",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "renovacao_estado",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Estado da renovação",
+   "no_copy": 1,
+   "options": "\nPendente\nPago\nRenovado\nConcluído\nCancelado",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ultima_renovacao",
+   "fieldtype": "Datetime",
+   "label": "Última renovação",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
    "depends_on": "eval:frappe.user.has_role('entretech suport') == 1",
    "doctype": "DocField",
    "fieldname": "credencial_column",
@@ -183,7 +223,7 @@
   {
    "doctype": "DocField",
    "fieldname": "password",
-   "fieldtype": "Data",
+   "fieldtype": "Password",
    "label": "Password"
   },
   {
@@ -275,8 +315,14 @@
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
- "links": [],
- "modified": "2026-10-01 12:00:00.000000",
+ "links": [
+  {
+   "group": "Renovações",
+   "link_doctype": "Domain Renewal",
+   "link_fieldname": "dominio"
+  }
+ ],
+ "modified": "2026-10-01 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Domain Management",

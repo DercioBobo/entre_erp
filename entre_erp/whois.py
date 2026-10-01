@@ -47,6 +47,10 @@ def actualizar(nome):
 		valores = {"whois_error": str(e)[:500] or e.__class__.__name__}
 	valores["whois_last_checked"] = now_datetime()
 	frappe.db.set_value("Domain Management", nome, valores, update_modified=False)
+
+	from entre_erp.dominios import depois_do_whois
+
+	depois_do_whois(nome, valores)
 	return valores
 
 

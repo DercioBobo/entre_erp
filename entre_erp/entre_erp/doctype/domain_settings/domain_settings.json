@@ -1,0 +1,94 @@
+{
+ "actions": [],
+ "creation": "2026-10-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_papeis",
+  "papel_pagamento",
+  "papel_renovacao",
+  "column_break_papeis",
+  "papel_confianca",
+  "section_prazos",
+  "dias_abrir_renovacao",
+  "column_break_prazos",
+  "dias_escalar"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_papeis",
+   "fieldtype": "Section Break",
+   "label": "Quem faz o quê"
+  },
+  {
+   "default": "entretech suport",
+   "fieldname": "papel_pagamento",
+   "fieldtype": "Link",
+   "label": "Marca como pago",
+   "options": "Role"
+  },
+  {
+   "default": "entretech suport",
+   "fieldname": "papel_renovacao",
+   "fieldtype": "Link",
+   "label": "Confirma a renovação (e recebe os alertas)",
+   "options": "Role"
+  },
+  {
+   "fieldname": "column_break_papeis",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "System Manager",
+   "fieldname": "papel_confianca",
+   "fieldtype": "Link",
+   "label": "Pode renovar antes do pagamento",
+   "options": "Role"
+  },
+  {
+   "fieldname": "section_prazos",
+   "fieldtype": "Section Break",
+   "label": "Prazos"
+  },
+  {
+   "default": "40",
+   "fieldname": "dias_abrir_renovacao",
+   "fieldtype": "Int",
+   "label": "Abrir a renovação (dias antes de expirar)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_prazos",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "3",
+   "fieldname": "dias_escalar",
+   "fieldtype": "Int",
+   "label": "Alertar quando pago e por renovar há (dias)",
+   "non_negative": 1
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-01 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Domain Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,295 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "dominio",
+  "customer",
+  "estado",
+  "column_break_ciclo",
+  "expira_em",
+  "expira_no_registo",
+  "periodo",
+  "valor",
+  "section_pagamento",
+  "data_pagamento",
+  "valor_pago",
+  "comprovativo",
+  "column_break_pagamento",
+  "pago_por",
+  "pago_em",
+  "section_renovacao",
+  "nova_expiracao",
+  "verificado_no_registo",
+  "motivo_sem_registo",
+  "column_break_renovacao",
+  "renovado_por",
+  "renovado_em",
+  "sem_pagamento",
+  "motivo_sem_pagamento",
+  "section_cancelamento",
+  "cancelado_por",
+  "cancelado_em",
+  "column_break_cancelamento",
+  "motivo_cancelamento"
+ ],
+ "fields": [
+  {
+   "default": "REN-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Série",
+   "options": "REN-.YYYY.-.####",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "dominio",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Domínio",
+   "options": "Domain Management",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fetch_from": "dominio.customer",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "read_only": 1
+  },
+  {
+   "default": "Pendente",
+   "fieldname": "estado",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Estado",
+   "no_copy": 1,
+   "options": "Pendente\nPago\nRenovado\nConcluído\nCancelado",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ciclo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "A data de renovação do domínio quando este ciclo abriu.",
+   "fieldname": "expira_em",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Expira em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "description": "O WHOIS quando este ciclo abriu: a renovação tem de o fazer avançar.",
+   "fieldname": "expira_no_registo",
+   "fieldtype": "Date",
+   "label": "Expirava no registo",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fetch_from": "dominio.periodo",
+   "fieldname": "periodo",
+   "fieldtype": "Data",
+   "label": "Periodo",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "dominio.valor",
+   "fetch_if_empty": 1,
+   "fieldname": "valor",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Valor"
+  },
+  {
+   "fieldname": "section_pagamento",
+   "fieldtype": "Section Break",
+   "label": "Pagamento"
+  },
+  {
+   "fieldname": "data_pagamento",
+   "fieldtype": "Date",
+   "label": "Data do pagamento",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "valor_pago",
+   "fieldtype": "Currency",
+   "label": "Valor pago",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "comprovativo",
+   "fieldtype": "Attach",
+   "label": "Comprovativo",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_pagamento",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pago_por",
+   "fieldtype": "Link",
+   "label": "Marcado como pago por",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pago_em",
+   "fieldtype": "Datetime",
+   "label": "Marcado como pago em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_renovacao",
+   "fieldtype": "Section Break",
+   "label": "Renovação"
+  },
+  {
+   "fieldname": "nova_expiracao",
+   "fieldtype": "Date",
+   "label": "Nova data de expiração",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "verificado_no_registo",
+   "fieldtype": "Check",
+   "label": "Confirmado no registo (WHOIS)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "motivo_sem_registo",
+   "fieldname": "motivo_sem_registo",
+   "fieldtype": "Small Text",
+   "label": "Motivo para confirmar sem o registo",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_renovacao",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "renovado_por",
+   "fieldtype": "Link",
+   "label": "Renovado por",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "renovado_em",
+   "fieldtype": "Datetime",
+   "label": "Renovado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "sem_pagamento",
+   "fieldtype": "Check",
+   "label": "Renovado antes do pagamento",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "sem_pagamento",
+   "fieldname": "motivo_sem_pagamento",
+   "fieldtype": "Small Text",
+   "label": "Motivo para renovar antes do pagamento",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.estado==\"Cancelado\"",
+   "fieldname": "section_cancelamento",
+   "fieldtype": "Section Break",
+   "label": "Cancelamento"
+  },
+  {
+   "fieldname": "cancelado_por",
+   "fieldtype": "Link",
+   "label": "Cancelado por",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancelado_em",
+   "fieldtype": "Datetime",
+   "label": "Cancelado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_cancelamento",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "motivo_cancelamento",
+   "fieldtype": "Small Text",
+   "label": "Motivo",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-01 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Domain Renewal",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "entretech suport",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "dominio, customer, estado",
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "dominio",
+ "track_changes": 1
+}

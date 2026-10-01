@@ -4,3 +4,7 @@
 entre_erp.patches.v0_1.factura_como_link
 entre_erp.patches.v0_1.criar_cashflow_settings
 entre_erp.patches.v0_1.facturas_duplicadas
+entre_erp.patches.v0_1.dominios_renovacoes
+entre_erp.patches.v0_1.dominios_password
+entre_erp.patches.v0_1.dominios_limpeza
+entre_erp.patches.v0_1.dominios_notificacoes
