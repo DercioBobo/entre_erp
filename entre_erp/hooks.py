@@ -52,4 +52,5 @@ doc_events = {
 # ---------------------------------------------------------------------------
 scheduler_events = {
     "monthly": ["entre_erp.pagamentos.criar_plano_do_mes"],
+    "weekly_long": ["entre_erp.whois.actualizar_todos"],
 }

@@ -1,0 +1,323 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:nome_do_dominio",
+ "color": "success",
+ "creation": "2024-06-12 14:13:18.921639",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "status",
+  "nome_do_dominio",
+  "customer",
+  "email",
+  "email_alternativo",
+  "telemovel",
+  "nuit",
+  "endereço",
+  "nots",
+  "column_break_7",
+  "pacote",
+  "periodo",
+  "valor",
+  "data_de_inicio",
+  "data_de_fim",
+  "comprovativo",
+  "credencial_column",
+  "link",
+  "username",
+  "password",
+  "whois_section",
+  "whois_expiry_date",
+  "whois_created_date",
+  "whois_updated_date",
+  "whois_registrar",
+  "whois_status",
+  "whois_column",
+  "whois_nameservers",
+  "whois_last_checked",
+  "whois_error",
+  "whois_raw"
+ ],
+ "fields": [
+  {
+   "doctype": "DocField",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "\nAtivo\nInativo\nPago\nNão Pago"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "nome_do_dominio",
+   "fieldtype": "Data",
+   "label": "Nome do Dominio",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "doctype": "DocField",
+   "fetch_from": "customer.email",
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "email_alternativo",
+   "fieldtype": "Data",
+   "label": "Email Alternativo"
+  },
+  {
+   "doctype": "DocField",
+   "fetch_from": "customer.telemovel",
+   "fieldname": "telemovel",
+   "fieldtype": "Data",
+   "label": "Telemovel"
+  },
+  {
+   "doctype": "DocField",
+   "fetch_from": "customer.tax_id",
+   "fieldname": "nuit",
+   "fieldtype": "Data",
+   "label": "NUIT"
+  },
+  {
+   "doctype": "DocField",
+   "fetch_from": "customer.primary_address",
+   "fieldname": "endereço",
+   "fieldtype": "Text",
+   "hidden": 1,
+   "label": "Endereço"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "nots",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": " Mandar notificações",
+   "options": "Sim\nNão"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "column_break_7",
+   "fieldtype": "Column Break"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "pacote",
+   "fieldtype": "Data",
+   "label": "Pacote"
+  },
+  {
+   "default": "1 Ano",
+   "doctype": "DocField",
+   "fieldname": "periodo",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Periodo",
+   "options": "1 Mes\n3 Meses\n6 Meses\n1 Ano\n2 Anos\n3 Anos"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "valor",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
+   "label": "Valor"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "data_de_inicio",
+   "fieldtype": "Date",
+   "label": "Data de inicio",
+   "reqd": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "data_de_fim",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Data de Renovação",
+   "reqd": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "comprovativo",
+   "fieldtype": "Attach",
+   "label": "Comprovativo"
+  },
+  {
+   "depends_on": "eval:frappe.user.has_role('entretech suport') == 1",
+   "doctype": "DocField",
+   "fieldname": "credencial_column",
+   "fieldtype": "Section Break",
+   "label": "Credencial"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "link",
+   "fieldtype": "Data",
+   "label": "Link"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "UserName"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "password",
+   "fieldtype": "Data",
+   "label": "Password"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "DocField",
+   "fieldname": "whois_section",
+   "fieldtype": "Section Break",
+   "label": "Registo (WHOIS)"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expira no Registo",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_created_date",
+   "fieldtype": "Date",
+   "label": "Registado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_updated_date",
+   "fieldtype": "Date",
+   "label": "Actualizado no Registo",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_registrar",
+   "fieldtype": "Data",
+   "label": "Registrar",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_status",
+   "fieldtype": "Small Text",
+   "label": "Estado no Registo",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_nameservers",
+   "fieldtype": "Small Text",
+   "label": "Name Servers",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_last_checked",
+   "fieldtype": "Datetime",
+   "label": "Última Consulta",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_error",
+   "fieldtype": "Small Text",
+   "label": "Erro da Última Consulta",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "doctype": "DocField",
+   "fieldname": "whois_raw",
+   "fieldtype": "Code",
+   "label": "Resposta do Registo",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-01 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Domain Management",
+ "name_case": "Title Case",
+ "naming_rule": "By fieldname",
+ "owner": "nanselmo@entretech.co.mz",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "doctype": "DocPerm",
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "doctype": "DocPerm",
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "entretech suport",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "nome_do_dominio, customer",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "nome_do_dominio",
+ "track_changes": 1,
+ "track_seen": 1
+}
