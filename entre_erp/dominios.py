@@ -22,6 +22,7 @@ ABERTOS = (PENDENTE, PAGO)
 
 ATIVO = "Ativo"
 EXPIRADO = "Expirado"
+# CANCELADO is shared with the renewal states.
 
 MESES_POR_PERIODO = {
 	"1 Mes": 1,
@@ -38,6 +39,8 @@ PADROES = {
 	"papel_confianca": "System Manager",
 	"dias_abrir_renovacao": 40,
 	"dias_escalar": 3,
+	"limite_consultas_hora": 30,
+	"cache_minutos": 15,
 }
 
 
@@ -81,12 +84,86 @@ def actualizar_dominio(dominio, **valores):
 	doc.save()
 
 
-def depois_do_whois(dominio, valores):
-	"""A domain marked Expirado that the registry shows as valid again was renewed."""
-	expira = valores.get("whois_expiry_date")
-	if expira and getdate(expira) >= getdate(today()):
-		if frappe.db.get_value("Domain Management", dominio, "estado") == EXPIRADO:
-			frappe.db.set_value("Domain Management", dominio, "estado", ATIVO, update_modified=False)
+def comentar(dominio, texto):
+	"""A line on the domain's timeline."""
+	frappe.get_doc(
+		{
+			"doctype": "Comment",
+			"comment_type": "Info",
+			"reference_doctype": "Domain Management",
+			"reference_name": dominio,
+			"content": texto,
+		}
+	).insert(ignore_permissions=True)
+
+
+def depois_do_whois(dominio, valores, automatico=True):
+	"""What a successful registry lookup means for the domain:
+	- no start date yet: the registry's creation date;
+	- Expirado but valid in the registry again: Ativo;
+	- a Pago renewal the registry shows done: confirmed (the customer gets the
+	  "renewed" email), unless the caller is confirming it itself;
+	- no renewal in progress: data_de_fim follows the registry's expiry.
+	"""
+	if valores.get("whois_error") or not valores.get("whois_expiry_date"):
+		return
+	expira = getdate(valores["whois_expiry_date"])
+	d = frappe.db.get_value(
+		"Domain Management", dominio, ["estado", "data_de_fim", "data_de_inicio"], as_dict=True
+	)
+
+	if not d.data_de_inicio and valores.get("whois_created_date"):
+		frappe.db.set_value(
+			"Domain Management", dominio, "data_de_inicio", valores["whois_created_date"], update_modified=False
+		)
+
+	if d.estado == EXPIRADO and expira >= getdate(today()):
+		frappe.db.set_value("Domain Management", dominio, "estado", ATIVO, update_modified=False)
+		comentar(dominio, _("Válido no registo até {0}: passou de Expirado a Ativo.").format(frappe.format(expira, "Date")))
+
+	if not automatico:
+		return
+	if aberta := renovacao_aberta(dominio):
+		renovacao = frappe.get_doc("Domain Renewal", aberta)
+		if renovacao.estado == PAGO and expira > getdate(renovacao.expira_no_registo or renovacao.expira_em):
+			renovacao.concluir(expira, automatico=True)
+			comentar(dominio, _("Renovação {0} confirmada automaticamente pelo registo.").format(aberta))
+	elif d.estado != CANCELADO and d.data_de_fim and getdate(d.data_de_fim) != expira:
+		frappe.db.set_value("Domain Management", dominio, "data_de_fim", expira, update_modified=False)
+		comentar(
+			dominio,
+			_("Data de renovação acertada pelo registo: {0} → {1}.").format(
+				frappe.format(d.data_de_fim, "Date"), frappe.format(expira, "Date")
+			),
+		)
+
+
+# Registry statuses (EPP; RDAP spells them with spaces) that mean the domain
+# is off the air or about to be lost.
+ESTADOS_PROBLEMA = {
+	"clienthold": "Suspenso (clientHold)",
+	"serverhold": "Suspenso pelo registo (serverHold)",
+	"pendingdelete": "A ser apagado (pendingDelete)",
+	"redemptionperiod": "Em período de resgate (redemptionPeriod)",
+}
+
+
+def problemas_no_registo(whois_status):
+	estado = (whois_status or "").lower().replace(" ", "")
+	return [_(rotulo) for codigo, rotulo in ESTADOS_PROBLEMA.items() if codigo in estado]
+
+
+def com_problemas_no_registo():
+	resultado = []
+	for d in frappe.get_all(
+		"Domain Management",
+		filters={"estado": ["!=", CANCELADO], "whois_status": ["is", "set"]},
+		fields=["name", "whois_status"],
+	):
+		if problemas := problemas_no_registo(d.whois_status):
+			d.problemas = problemas
+			resultado.append(d)
+	return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -150,45 +227,45 @@ def renovadas_fora_do_sistema():
 def enviar_alertas():
 	atrasadas = renovacoes_atrasadas()
 	fora = renovadas_fora_do_sistema()
+	problemas = com_problemas_no_registo()
 	destinatarios = get_users_with_role(definicao("papel_renovacao"))
-	if not (atrasadas or fora) or not destinatarios:
+	if not (atrasadas or fora or problemas) or not destinatarios:
 		return
 
-	def ligacao(r):
-		return f'<a href="{get_url_to_form("Domain Renewal", r.name)}">{frappe.utils.escape_html(r.dominio)}</a>'
+	def ligacao(doctype, nome, texto):
+		return f'<a href="{get_url_to_form(doctype, nome)}">{frappe.utils.escape_html(texto)}</a>'
 
-	partes = []
-	if atrasadas:
-		partes.append(
-			"<h3>"
-			+ _("Pagos há mais de {0} dias e ainda por renovar").format(definicao("dias_escalar"))
-			+ "</h3><ul>"
-			+ "".join(
-				f"<li>{ligacao(r)}: "
+	def seccao(titulo, linhas):
+		return f"<h3>{titulo}</h3><ul>" + "".join(f"<li>{linha}</li>" for linha in linhas) + "</ul>" if linhas else ""
+
+	mensagem = (
+		seccao(
+			_("Pagos há mais de {0} dias e ainda por renovar").format(definicao("dias_escalar")),
+			[
+				ligacao("Domain Renewal", r.name, r.dominio)
+				+ ": "
 				+ _("pago em {0}, expira em {1}").format(
 					frappe.format(r.pago_em, "Datetime"), frappe.format(r.expira_em, "Date")
 				)
-				+ "</li>"
 				for r in atrasadas
-			)
-			+ "</ul>"
+			],
 		)
-	if fora:
-		partes.append(
-			"<h3>"
-			+ _("Já renovados no registo, mas por confirmar no ERP")
-			+ "</h3><ul>"
-			+ "".join(
-				f"<li>{ligacao(r)} ({r.estado}): "
+		+ seccao(
+			_("Já renovados no registo, mas por confirmar no ERP"),
+			[
+				ligacao("Domain Renewal", r.name, r.dominio)
+				+ f" ({r.estado}): "
 				+ _("o registo expira agora em {0}").format(frappe.format(r.whois_expiry_date, "Date"))
-				+ "</li>"
 				for r in fora
-			)
-			+ "</ul>"
+			],
 		)
-
+		+ seccao(
+			_("Com problemas no registo"),
+			[ligacao("Domain Management", d.name, d.name) + ": " + ", ".join(d.problemas) for d in problemas],
+		)
+	)
 	frappe.sendmail(
 		recipients=destinatarios,
-		subject=_("Domínios: {0} renovações por tratar").format(len(atrasadas) + len(fora)),
-		message="".join(partes),
+		subject=_("Domínios: {0} por tratar").format(len(atrasadas) + len(fora) + len(problemas)),
+		message=mensagem,
 	)

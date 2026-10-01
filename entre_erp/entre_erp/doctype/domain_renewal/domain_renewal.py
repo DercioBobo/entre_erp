@@ -75,7 +75,8 @@ class DomainRenewal(Document):
 
 		from entre_erp.whois import actualizar
 
-		registo = actualizar(self.dominio)
+		# Fresh: the renewal may have happened minutes ago.
+		registo = actualizar(self.dominio, automatico=False, usar_cache=False)
 		expira = registo.get("whois_expiry_date")
 		referencia = self.expira_no_registo or self.expira_em
 		confirmado = bool(expira and not registo.get("whois_error") and getdate(expira) > getdate(referencia))
@@ -91,15 +92,26 @@ class DomainRenewal(Document):
 				frappe.throw(_("Indique porque confirma sem o registo mostrar a renovação."))
 			expira = add_months(self.expira_em, meses(self.periodo))
 
+		self.concluir(
+			expira,
+			motivo_sem_registo=None if confirmado else motivo_sem_registo,
+			motivo_sem_pagamento=motivo_sem_pagamento if novo_estado == RENOVADO else None,
+		)
+		return {"confirmado": True}
+
+	def concluir(self, expira, automatico=False, motivo_sem_registo=None, motivo_sem_pagamento=None):
+		"""Record the renewal and move the domain to its new expiry. automatico:
+		the registry showed a paid renewal done before anyone confirmed it."""
 		self.update(
 			{
-				"estado": novo_estado,
+				"estado": RENOVADO if motivo_sem_pagamento else CONCLUIDO,
 				"nova_expiracao": getdate(expira),
-				"verificado_no_registo": int(confirmado),
-				"motivo_sem_registo": None if confirmado else motivo_sem_registo,
-				"sem_pagamento": int(novo_estado == RENOVADO),
-				"motivo_sem_pagamento": motivo_sem_pagamento if novo_estado == RENOVADO else None,
-				"renovado_por": frappe.session.user,
+				"verificado_no_registo": int(not motivo_sem_registo),
+				"motivo_sem_registo": motivo_sem_registo,
+				"sem_pagamento": int(bool(motivo_sem_pagamento)),
+				"motivo_sem_pagamento": motivo_sem_pagamento,
+				"confirmado_automaticamente": int(automatico),
+				"renovado_por": None if automatico else frappe.session.user,
 				"renovado_em": now_datetime(),
 			}
 		)
@@ -112,7 +124,6 @@ class DomainRenewal(Document):
 			renovacao_estado=self.estado,
 			ultima_renovacao=self.renovado_em,
 		)
-		return {"confirmado": True}
 
 	@frappe.whitelist()
 	def cancelar(self, motivo):

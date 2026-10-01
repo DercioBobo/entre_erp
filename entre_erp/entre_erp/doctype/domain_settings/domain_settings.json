@@ -12,7 +12,11 @@
   "section_prazos",
   "dias_abrir_renovacao",
   "column_break_prazos",
-  "dias_escalar"
+  "dias_escalar",
+  "section_registo",
+  "limite_consultas_hora",
+  "column_break_registo",
+  "cache_minutos"
  ],
  "fields": [
   {
@@ -67,11 +71,36 @@
    "fieldtype": "Int",
    "label": "Alertar quando pago e por renovar há (dias)",
    "non_negative": 1
+  },
+  {
+   "description": "O registo .mz proíbe consultas automáticas em grande volume. Todas as consultas, de todos os utilizadores e tarefas, contam para o mesmo limite.",
+   "fieldname": "section_registo",
+   "fieldtype": "Section Break",
+   "label": "Consultas ao registo (WHOIS)"
+  },
+  {
+   "default": "30",
+   "fieldname": "limite_consultas_hora",
+   "fieldtype": "Int",
+   "label": "Máximo de consultas por hora",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_registo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "15",
+   "description": "Consultar o mesmo domínio outra vez dentro deste tempo não pergunta ao registo. Confirmar uma renovação pergunta sempre.",
+   "fieldname": "cache_minutos",
+   "fieldtype": "Int",
+   "label": "Reutilizar uma resposta durante (minutos)",
+   "non_negative": 1
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-01 12:00:00.000000",
+ "modified": "2026-10-02 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Domain Settings",

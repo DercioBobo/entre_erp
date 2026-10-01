@@ -28,6 +28,7 @@
   "column_break_renovacao",
   "renovado_por",
   "renovado_em",
+  "confirmado_automaticamente",
   "sem_pagamento",
   "motivo_sem_pagamento",
   "section_cancelamento",
@@ -201,6 +202,13 @@
    "fieldname": "renovado_em",
    "fieldtype": "Datetime",
    "label": "Renovado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "confirmado_automaticamente",
+   "fieldtype": "Check",
+   "label": "Confirmado automaticamente pelo registo",
    "no_copy": 1,
    "read_only": 1
   },
