@@ -557,7 +557,13 @@ class PainelDominios {
 					${this.campo(__("Última renovação"), d.ultima_renovacao ? frappe.datetime.str_to_user(d.ultima_renovacao.split(" ")[0]) : "—")}
 					${this.campo(__("Período"), dm_esc(d.periodo || "—"))}
 					${this.campo(__("Valor"), d.valor ? format_currency(d.valor) : "—")}
-					${this.campo(__("Última factura"), d.ultima_factura ? `<a href="/app/sales-invoice/${encodeURIComponent(d.ultima_factura)}">${dm_esc(d.ultima_factura)}</a>` : "—")}
+					${this.campo(
+						__("Última factura"),
+						d.ultima_factura
+							? `<a href="/app/sales-invoice/${encodeURIComponent(d.ultima_factura)}">${dm_esc(d.ultima_factura)}</a>
+							   <button class="btn btn-link btn-xs dm-desligar-factura" title="${__("Desligar factura")}">✕ ${__("desligar")}</button>`
+							: "—"
+					)}
 				</div>
 			</div>
 
@@ -616,6 +622,16 @@ class PainelDominios {
 				.finally(() => $(e.currentTarget).prop("disabled", false));
 		});
 		$det.find(".dm-ver-factura").on("click", () => frappe.set_route("Form", "Sales Invoice", d.factura));
+		$det.find(".dm-desligar-factura").on("click", () =>
+			frappe.confirm(
+				__("Desligar a factura {0}? A factura não é apagada: apague-a ou cancele-a na própria factura.", [dm_esc(d.ultima_factura)]),
+				() =>
+					frappe.xcall("entre_erp.painel_dominios.desligar_factura", { nome: d.name }).then(() => {
+						frappe.show_alert({ message: __("Factura desligada"), indicator: "green" });
+						return this.carregar();
+					})
+			)
+		);
 		$det.find(".dm-criar-factura").on("click", (e) => {
 			$(e.currentTarget).prop("disabled", true);
 			frappe

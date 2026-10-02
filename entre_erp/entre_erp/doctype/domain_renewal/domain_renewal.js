@@ -78,6 +78,13 @@ function criar_factura(frm) {
 	);
 }
 
+function desligar_factura(frm) {
+	frappe.confirm(
+		__("Desligar a factura {0} desta renovação? A factura não é apagada: apague-a ou cancele-a na própria factura.", [frm.doc.factura]),
+		() => frm.call({ method: "desligar_factura", doc: frm.doc }).then(() => frm.reload_doc())
+	);
+}
+
 function cancelar(frm) {
 	frappe.prompt(
 		{ fieldname: "motivo", fieldtype: "Small Text", label: __("Motivo"), reqd: 1 },
@@ -110,6 +117,7 @@ frappe.ui.form.on("Domain Renewal", {
 		// Draft only: submitting and the payment are done on the invoice itself.
 		if (frm.doc.factura) {
 			frm.add_custom_button(__("Ver factura"), () => frappe.set_route("Form", "Sales Invoice", frm.doc.factura));
+			frm.add_custom_button(__("Desligar factura"), () => desligar_factura(frm), __("Mais"));
 		}
 		// With an invoice already, under Mais: it only makes a new one if that was cancelled.
 		if (estado !== "Cancelado" && frappe.model.can_create("Sales Invoice")) {

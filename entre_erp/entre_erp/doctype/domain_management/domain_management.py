@@ -35,6 +35,13 @@ class DomainManagement(Document):
 		return facturar(self.name)
 
 	@frappe.whitelist()
+	def desligar_factura(self):
+		self.check_permission("write")
+		from entre_erp.painel_dominios import desligar_factura
+
+		desligar_factura(self.name)
+
+	@frappe.whitelist()
 	def ver_password(self):
 		"""The password is stored encrypted; whoever can edit the domain can read it."""
 		self.check_permission("write")

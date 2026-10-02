@@ -223,18 +223,38 @@ def criar_factura_dominio(dominio):
 	# A draft not dealt with yet: open that one instead of making another.
 	if d.ultima_factura and frappe.db.get_value("Sales Invoice", d.ultima_factura, "docstatus") == 0:
 		return d.ultima_factura
-	inicio = getdate(d.data_de_inicio) if d.data_de_inicio else None
-	fim = getdate(d.data_de_fim) if d.data_de_fim else None
+	# The current period: one periodo ending at the expiry, not the whole time
+	# since the domain was first registered.
+	expira = d.data_de_fim or d.whois_expiry_date
+	fim = getdate(expira) if expira else None
+	inicio = add_months(fim, -meses(d.periodo)) if fim else None
+	# Its first period is a registration; any later one, a renewal.
+	primeiro = not d.data_de_inicio or (inicio and getdate(d.data_de_inicio) >= inicio)
+	titulo = _("Registo de domínio {0}") if primeiro else _("Renovação de domínio {0}")
 	factura = _nova_factura(
 		d,
 		inicio,
 		fim,
 		None,
 		_("Domínio {0}").format(d.name),
-		_("Registo de domínio {0}").format(d.nome_do_dominio or d.name),
+		titulo.format(d.nome_do_dominio or d.name),
 	)
 	comentar(d.name, _("Factura {0} criada (rascunho).").format(factura))
 	return factura
+
+
+def desligar_factura(factura):
+	"""Forget an invoice on every domain and renewal that points at it."""
+	for renovacao in frappe.get_all("Domain Renewal", filters={"factura": factura}, fields=["name", "dominio"]):
+		frappe.db.set_value("Domain Renewal", renovacao.name, "factura", None)
+		comentar(renovacao.dominio, _("Factura {0} desligada da renovação {1}.").format(factura, renovacao.name))
+	for dominio in frappe.get_all("Domain Management", filters={"ultima_factura": factura}, pluck="name"):
+		frappe.db.set_value("Domain Management", dominio, "ultima_factura", None, update_modified=False)
+		comentar(dominio, _("Factura {0} desligada.").format(factura))
+
+
+def ao_apagar_factura(doc, method=None):
+	desligar_factura(doc.name)
 
 
 def _nova_factura(d, inicio, fim, valor_renovacao, observacoes, titulo):

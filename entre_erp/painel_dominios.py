@@ -204,6 +204,21 @@ def arquivar(nome, arquivado):
 	doc.save()
 
 
+@frappe.whitelist(methods=["POST"])
+def desligar_factura(nome):
+	"""Unlink the domain's last invoice (and its renewal's), to make it again.
+	The invoice itself stays: delete or cancel it on the invoice."""
+	frappe.get_doc("Domain Management", nome).check_permission("write")
+	from entre_erp.dominios import desligar_factura
+
+	renovacao = frappe.db.get_value("Domain Management", nome, "renovacao_actual")
+	for factura in {
+		frappe.db.get_value("Domain Management", nome, "ultima_factura"),
+		renovacao and frappe.db.get_value("Domain Renewal", renovacao, "factura"),
+	} - {None, ""}:
+		desligar_factura(factura)
+
+
 @frappe.whitelist()
 def abrir_renovacao(nome):
 	frappe.get_doc("Domain Management", nome).check_permission("write")

@@ -70,6 +70,15 @@ frappe.ui.form.on("Domain Management", {
 			);
 		}
 
+		if (frm.doc.ultima_factura) {
+			frm.add_custom_button(__("Desligar factura"), () =>
+				frappe.confirm(
+					__("Desligar a factura {0}? A factura não é apagada: apague-a ou cancele-a na própria factura.", [frm.doc.ultima_factura]),
+					() => frm.call({ method: "desligar_factura", doc: frm.doc }).then(() => frm.reload_doc())
+				)
+			);
+		}
+
 		if (frm.doc.password) {
 			frm.add_custom_button(__("Ver password"), () =>
 				frm.call({ method: "ver_password", doc: frm.doc }).then(({ message }) =>

@@ -37,6 +37,15 @@ class DomainRenewal(Document):
 		return criar_factura(self.name)
 
 	@frappe.whitelist()
+	def desligar_factura(self):
+		"""Unlink the invoice (made by mistake, say); it is then deleted or cancelled on its own."""
+		self.check_permission("write")
+		from entre_erp.dominios import desligar_factura
+
+		if self.factura:
+			desligar_factura(self.factura)
+
+	@frappe.whitelist()
 	def marcar_como_pago(self, data_pagamento, valor_pago, comprovativo):
 		"""Pendente → Pago (the tech is told to renew), or Renovado → Concluído."""
 		exigir_papel("papel_pagamento")
