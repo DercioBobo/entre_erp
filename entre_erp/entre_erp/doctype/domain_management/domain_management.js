@@ -32,6 +32,16 @@ function somar_valor(frm) {
 	}
 }
 
+// The server answers {existente} or {doc}: a new invoice filled in, not saved yet.
+function abrir_factura(r) {
+	if (r.existente) {
+		frappe.set_route("Form", "Sales Invoice", r.existente);
+		return;
+	}
+	const [doc] = frappe.model.sync(r.doc);
+	frappe.set_route("Form", doc.doctype, doc.name);
+}
+
 frappe.ui.form.on("Domain Management", {
 	valor_dominio: somar_valor,
 	valor_hospedagem: somar_valor,
@@ -65,8 +75,8 @@ frappe.ui.form.on("Domain Management", {
 		if (frappe.model.can_create("Sales Invoice") && frm.doc.estado !== "Cancelado") {
 			frm.add_custom_button(__("Criar factura"), () =>
 				frm
-					.call({ method: "criar_factura", doc: frm.doc, freeze: true, freeze_message: __("A criar a factura...") })
-					.then(({ message }) => frappe.set_route("Form", "Sales Invoice", message))
+					.call({ method: "criar_factura", doc: frm.doc, freeze: true, freeze_message: __("A preparar a factura...") })
+					.then(({ message }) => abrir_factura(message))
 			);
 		}
 

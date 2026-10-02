@@ -181,9 +181,9 @@ def _valida(factura):
 
 
 def facturar(dominio):
-	"""A draft Sales Invoice for a domain: for its renewal in progress if there
-	is one, otherwise for the domain itself (a new domain, from its start date
-	to its renewal date), without starting a renewal."""
+	"""A Sales Invoice for a domain: for its renewal in progress if there is
+	one, otherwise for the domain's current period, without starting a renewal.
+	See criar_factura for what comes back."""
 	estado = frappe.db.get_value("Domain Management", dominio, ["renovacao_actual", "renovacao_estado"], as_dict=True)
 	if renovacao := renovacao_aberta(dominio) or (
 		estado.renovacao_actual if estado.renovacao_estado == RENOVADO else None
@@ -193,11 +193,12 @@ def facturar(dominio):
 
 
 def criar_factura(renovacao):
-	"""A draft Sales Invoice for a renewal, for the period after its expiry.
-	Asking again returns the same invoice, unless it was cancelled."""
+	"""For a renewal, for the period after its expiry: {"existente": name} when
+	it already has an invoice (unless cancelled), otherwise {"doc": ...}, a new
+	invoice filled in but not saved, for the user to adjust and save."""
 	r = frappe.get_doc("Domain Renewal", renovacao)
 	if factura := _valida(r.factura):
-		return factura
+		return {"existente": factura}
 	if r.estado == CANCELADO:
 		frappe.throw(_("Esta renovação foi cancelada."))
 	d = frappe.get_doc("Domain Management", r.dominio)
@@ -213,16 +214,15 @@ def criar_factura(renovacao):
 		_("Renovação {0} do domínio {1}").format(r.name, d.name),
 		_("Renovação de domínio {0}").format(d.nome_do_dominio or d.name),
 	)
-	frappe.db.set_value("Domain Renewal", r.name, "factura", factura)
-	comentar(d.name, _("Factura {0} criada (rascunho) para a renovação {1}.").format(factura, r.name))
-	return factura
+	factura.renovacao_dominio = r.name
+	return {"doc": _por_guardar(factura)}
 
 
 def criar_factura_dominio(dominio):
 	d = frappe.get_doc("Domain Management", dominio)
 	# A draft not dealt with yet: open that one instead of making another.
 	if d.ultima_factura and frappe.db.get_value("Sales Invoice", d.ultima_factura, "docstatus") == 0:
-		return d.ultima_factura
+		return {"existente": d.ultima_factura}
 	# The current period: one periodo ending at the expiry, not the whole time
 	# since the domain was first registered.
 	expira = d.data_de_fim or d.whois_expiry_date
@@ -239,8 +239,29 @@ def criar_factura_dominio(dominio):
 		_("Domínio {0}").format(d.name),
 		titulo.format(d.nome_do_dominio or d.name),
 	)
-	comentar(d.name, _("Factura {0} criada (rascunho).").format(factura))
-	return factura
+	return {"doc": _por_guardar(factura)}
+
+
+def _por_guardar(factura):
+	"""The invoice as the desk opens a new, unsaved form (frappe.model.sync)."""
+	doc = factura.as_dict()
+	doc["__islocal"] = 1
+	doc.pop("name", None)
+	for tabela in factura.meta.get_table_fields():
+		for linha in doc.get(tabela.fieldname) or []:
+			linha["__islocal"] = 1
+			linha.pop("name", None)
+			linha.pop("parent", None)
+	return doc
+
+
+def ao_guardar_factura(doc, method=None):
+	"""A domain invoice saved for the first time: link it back."""
+	if doc.get("renovacao_dominio"):
+		frappe.db.set_value("Domain Renewal", doc.renovacao_dominio, "factura", doc.name)
+	if doc.get("dominio"):
+		frappe.db.set_value("Domain Management", doc.dominio, "ultima_factura", doc.name, update_modified=False)
+		comentar(doc.dominio, _("Factura {0} criada.").format(doc.name))
 
 
 def desligar_factura(factura):
@@ -259,8 +280,8 @@ def ao_apagar_factura(doc, method=None):
 
 def _nova_factura(d, inicio, fim, valor_renovacao, observacoes, titulo):
 	"""One line for the domain and one for the hosting, from the domain's split
-	values. Inserted with the user's own permissions and left in draft:
-	submitting and the payment are done on the invoice, by hand."""
+	values. Not saved: the user adjusts it (naming series and all), saves and
+	submits it, and records the payment, by hand."""
 	if not d.customer:
 		frappe.throw(_("O domínio {0} não tem cliente.").format(d.name))
 
@@ -288,6 +309,7 @@ def _nova_factura(d, inicio, fim, valor_renovacao, observacoes, titulo):
 			or frappe.db.get_single_value("Global Defaults", "default_company"),
 			"posting_date": today(),
 			"remarks": observacoes,
+			"dominio": d.name,
 		}
 	)
 	# invoice_title is a custom field on this site's Sales Invoice.
@@ -299,10 +321,8 @@ def _nova_factura(d, inicio, fim, valor_renovacao, observacoes, titulo):
 	# set_missing_values brings the item's own description and price back.
 	for linha, (_item, valor) in zip(factura.items, linhas):
 		linha.update({"rate": valor, "description": descricao})
-	factura.insert()
-
-	frappe.db.set_value("Domain Management", d.name, "ultima_factura", factura.name, update_modified=False)
-	return factura.name
+	factura.calculate_taxes_and_totals()
+	return factura
 
 
 # ---------------------------------------------------------------------------

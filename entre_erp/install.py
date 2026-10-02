@@ -6,6 +6,16 @@ def after_install():
     create_tech_role()
     create_categorias_de_despesa()
     create_cashflow_settings()
+    create_dominios_facturacao()
+
+
+def create_dominios_facturacao():
+    """Domain invoicing: the Sales Invoice fields and the two Items. These are
+    patches too, for sites installed before them (install skips patches)."""
+    from entre_erp.patches.v0_1 import dominios_campos_factura, dominios_itens_factura
+
+    dominios_campos_factura.execute()
+    dominios_itens_factura.execute()
 
 
 def create_tech_lead_role():

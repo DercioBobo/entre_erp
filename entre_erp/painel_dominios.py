@@ -180,8 +180,11 @@ def apagar_dominio(nome):
 			),
 			frappe.PermissionError,
 		)
-	# The domain points at its current renewal and every renewal at the domain.
+	# The domain points at its current renewal and every renewal at the domain;
+	# its invoices stay, without the link.
 	frappe.db.set_value("Domain Management", nome, "renovacao_actual", None, update_modified=False)
+	for factura in frappe.get_all("Sales Invoice", filters={"dominio": nome}, pluck="name"):
+		frappe.db.set_value("Sales Invoice", factura, {"dominio": None, "renovacao_dominio": None}, update_modified=False)
 	for renovacao in renovacoes:
 		frappe.delete_doc("Domain Renewal", renovacao, ignore_permissions=True)
 	frappe.delete_doc("Domain Management", nome)
@@ -189,6 +192,7 @@ def apagar_dominio(nome):
 
 @frappe.whitelist(methods=["POST"])
 def criar_factura(nome):
+	"""{"existente": name} or {"doc": ...}, an unsaved invoice to open (dominios.criar_factura)."""
 	frappe.get_doc("Domain Management", nome).check_permission("write")
 	from entre_erp.dominios import facturar
 

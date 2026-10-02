@@ -46,6 +46,7 @@ doc_events = {
         "on_cancel": "entre_erp.pagamentos.desligar_factura_cancelada",
     },
     "Sales Invoice": {
+        "after_insert": "entre_erp.dominios.ao_guardar_factura",
         # Before Frappe's link check, so a domain's invoice can be deleted.
         "on_trash": "entre_erp.dominios.ao_apagar_factura",
         "on_cancel": "entre_erp.dominios.ao_apagar_factura",

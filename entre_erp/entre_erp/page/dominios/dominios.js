@@ -33,6 +33,16 @@ const dm_como_dominio = (texto) =>
 		.replace(/\.$/, "");
 const dm_parece_dominio = (texto) => /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(texto);
 
+// The server answers {existente} or {doc}: a new invoice filled in, not saved yet.
+function dm_abrir_factura(r) {
+	if (r.existente) {
+		frappe.set_route("Form", "Sales Invoice", r.existente);
+		return;
+	}
+	const [doc] = frappe.model.sync(r.doc);
+	frappe.set_route("Form", doc.doctype, doc.name);
+}
+
 function dm_quando(dias) {
 	if (dias == null) return __("Sem data");
 	if (dias < 0) return dias === -1 ? __("Expirou ontem") : __("Expirou há {0} dias", [-dias]);
@@ -636,7 +646,7 @@ class PainelDominios {
 			$(e.currentTarget).prop("disabled", true);
 			frappe
 				.xcall("entre_erp.painel_dominios.criar_factura", { nome: d.name })
-				.then((factura) => frappe.set_route("Form", "Sales Invoice", factura))
+				.then((r) => dm_abrir_factura(r))
 				.finally(() => $(e.currentTarget).prop("disabled", false));
 		});
 		$det.find(".dm-extra").on("click", ".dm-ver-registo", (e) => {

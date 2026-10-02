@@ -28,7 +28,7 @@ class DomainManagement(Document):
 
 	@frappe.whitelist()
 	def criar_factura(self):
-		"""A draft Sales Invoice: for the renewal in progress, or for the domain itself."""
+		"""A Sales Invoice to open: for the renewal in progress, or for the domain itself."""
 		self.check_permission("write")
 		from entre_erp.dominios import facturar
 
