@@ -205,7 +205,14 @@ def criar_factura(renovacao):
 	inicio = getdate(r.expira_em) if r.expira_em else None
 	fim = add_months(inicio, meses(periodo)) if inicio else None
 
-	factura = _nova_factura(d, inicio, fim, flt(r.valor), _("Renovação {0} do domínio {1}").format(r.name, d.name))
+	factura = _nova_factura(
+		d,
+		inicio,
+		fim,
+		flt(r.valor),
+		_("Renovação {0} do domínio {1}").format(r.name, d.name),
+		_("Renovação de domínio {0}").format(d.nome_do_dominio or d.name),
+	)
 	frappe.db.set_value("Domain Renewal", r.name, "factura", factura)
 	comentar(d.name, _("Factura {0} criada (rascunho) para a renovação {1}.").format(factura, r.name))
 	return factura
@@ -218,12 +225,19 @@ def criar_factura_dominio(dominio):
 		return d.ultima_factura
 	inicio = getdate(d.data_de_inicio) if d.data_de_inicio else None
 	fim = getdate(d.data_de_fim) if d.data_de_fim else None
-	factura = _nova_factura(d, inicio, fim, None, _("Domínio {0}").format(d.name))
+	factura = _nova_factura(
+		d,
+		inicio,
+		fim,
+		None,
+		_("Domínio {0}").format(d.name),
+		_("Registo de domínio {0}").format(d.nome_do_dominio or d.name),
+	)
 	comentar(d.name, _("Factura {0} criada (rascunho).").format(factura))
 	return factura
 
 
-def _nova_factura(d, inicio, fim, valor_renovacao, observacoes):
+def _nova_factura(d, inicio, fim, valor_renovacao, observacoes, titulo):
 	"""One line for the domain and one for the hosting, from the domain's split
 	values. Inserted with the user's own permissions and left in draft:
 	submitting and the payment are done on the invoice, by hand."""
@@ -256,6 +270,9 @@ def _nova_factura(d, inicio, fim, valor_renovacao, observacoes):
 			"remarks": observacoes,
 		}
 	)
+	# invoice_title is a custom field on this site's Sales Invoice.
+	if factura.meta.has_field("invoice_title"):
+		factura.invoice_title = titulo
 	for item, valor in linhas:
 		factura.append("items", {"item_code": item, "qty": 1, "rate": valor, "description": descricao})
 	factura.set_missing_values()
