@@ -26,7 +26,16 @@ function mostrar_aviso_whois(frm) {
 	}
 }
 
+function somar_valor(frm) {
+	if (frm.doc.valor_dominio || frm.doc.valor_hospedagem) {
+		frm.set_value("valor", flt(frm.doc.valor_dominio) + flt(frm.doc.valor_hospedagem));
+	}
+}
+
 frappe.ui.form.on("Domain Management", {
+	valor_dominio: somar_valor,
+	valor_hospedagem: somar_valor,
+
 	refresh(frm) {
 		mostrar_aviso_whois(frm);
 		if (frm.is_new()) return;
@@ -50,6 +59,14 @@ frappe.ui.form.on("Domain Management", {
 				frm.call({ method: "abrir_renovacao", doc: frm.doc }).then(({ message }) =>
 					frappe.set_route("Form", "Domain Renewal", message)
 				)
+			);
+		}
+
+		if (frappe.model.can_create("Sales Invoice") && frm.doc.estado !== "Cancelado") {
+			frm.add_custom_button(__("Criar factura"), () =>
+				frm
+					.call({ method: "criar_factura", doc: frm.doc, freeze: true, freeze_message: __("A criar a factura...") })
+					.then(({ message }) => frappe.set_route("Form", "Sales Invoice", message))
 			);
 		}
 

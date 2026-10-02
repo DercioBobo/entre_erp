@@ -14,6 +14,7 @@
   "expira_no_registo",
   "periodo",
   "valor",
+  "factura",
   "section_pagamento",
   "data_pagamento",
   "valor_pago",
@@ -113,6 +114,15 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Valor"
+  },
+  {
+   "fieldname": "factura",
+   "fieldtype": "Link",
+   "label": "Factura",
+   "no_copy": 1,
+   "options": "Sales Invoice",
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "section_pagamento",
@@ -261,7 +271,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-01 12:00:00.000000",
+ "modified": "2026-10-02 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Domain Renewal",

@@ -72,6 +72,12 @@ function renovar_sem_pagamento(frm) {
 	);
 }
 
+function criar_factura(frm) {
+	frm.call({ method: "criar_factura", doc: frm.doc, freeze: true, freeze_message: __("A criar a factura...") }).then(
+		({ message }) => frappe.set_route("Form", "Sales Invoice", message)
+	);
+}
+
 function cancelar(frm) {
 	frappe.prompt(
 		{ fieldname: "motivo", fieldtype: "Small Text", label: __("Motivo"), reqd: 1 },
@@ -100,6 +106,15 @@ frappe.ui.form.on("Domain Renewal", {
 			frm.add_custom_button(__("Cancelar"), () => cancelar(frm), __("Mais"));
 		}
 		frm.add_custom_button(__("Domínio"), () => frappe.set_route("Form", "Domain Management", frm.doc.dominio));
+
+		// Draft only: submitting and the payment are done on the invoice itself.
+		if (frm.doc.factura) {
+			frm.add_custom_button(__("Ver factura"), () => frappe.set_route("Form", "Sales Invoice", frm.doc.factura));
+		}
+		// With an invoice already, under Mais: it only makes a new one if that was cancelled.
+		if (estado !== "Cancelado" && frappe.model.can_create("Sales Invoice")) {
+			frm.add_custom_button(__("Criar factura"), () => criar_factura(frm), frm.doc.factura ? __("Mais") : null);
+		}
 
 		if (estado === "Renovado") {
 			frm.set_intro(__("Renovado antes do pagamento: falta marcar como pago."), "orange");

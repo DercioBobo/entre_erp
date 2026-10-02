@@ -21,6 +21,9 @@
   "pacote",
   "periodo",
   "valor",
+  "valor_dominio",
+  "valor_hospedagem",
+  "ultima_factura",
   "data_de_inicio",
   "data_de_fim",
   "comprovativo",
@@ -137,13 +140,35 @@
    "options": "1 Mes\n3 Meses\n6 Meses\n1 Ano\n2 Anos\n3 Anos"
   },
   {
+   "description": "Total. Preenchido pela soma de Domínio e Hospedagem quando divididos.",
    "doctype": "DocField",
    "fieldname": "valor",
    "fieldtype": "Currency",
    "in_list_view": 1,
    "in_preview": 1,
    "in_standard_filter": 1,
-   "label": "Valor"
+   "label": "Valor",
+   "read_only_depends_on": "eval:doc.valor_dominio || doc.valor_hospedagem"
+  },
+  {
+   "description": "Linha do item de domínio na factura.",
+   "fieldname": "valor_dominio",
+   "fieldtype": "Currency",
+   "label": "Valor do domínio"
+  },
+  {
+   "description": "Linha do item de hospedagem na factura. Vazio: sem hospedagem.",
+   "fieldname": "valor_hospedagem",
+   "fieldtype": "Currency",
+   "label": "Valor da hospedagem"
+  },
+  {
+   "fieldname": "ultima_factura",
+   "fieldtype": "Link",
+   "label": "Última factura",
+   "no_copy": 1,
+   "options": "Sales Invoice",
+   "read_only": 1
   },
   {
    "doctype": "DocField",
@@ -322,7 +347,7 @@
    "link_fieldname": "dominio"
   }
  ],
- "modified": "2026-10-01 18:00:00.000000",
+ "modified": "2026-10-02 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Domain Management",

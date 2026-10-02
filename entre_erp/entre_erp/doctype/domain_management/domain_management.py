@@ -1,8 +1,14 @@
 import frappe
 from frappe.model.document import Document
+from frappe.utils import flt
 
 
 class DomainManagement(Document):
+	def validate(self):
+		# Split into domain + hosting (the invoice lines): the total follows.
+		if self.valor_dominio or self.valor_hospedagem:
+			self.valor = flt(self.valor_dominio) + flt(self.valor_hospedagem)
+
 	@frappe.whitelist()
 	def consultar_whois(self):
 		self.check_permission("write")
@@ -16,6 +22,14 @@ class DomainManagement(Document):
 		from entre_erp.dominios import abrir_renovacao
 
 		return abrir_renovacao(self.name)
+
+	@frappe.whitelist()
+	def criar_factura(self):
+		"""A draft Sales Invoice: for the renewal in progress, or for the domain itself."""
+		self.check_permission("write")
+		from entre_erp.dominios import facturar
+
+		return facturar(self.name)
 
 	@frappe.whitelist()
 	def ver_password(self):

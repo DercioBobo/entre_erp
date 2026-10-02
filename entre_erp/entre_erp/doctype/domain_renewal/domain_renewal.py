@@ -30,6 +30,13 @@ class DomainRenewal(Document):
 			frappe.throw(_("O domínio {0} já tem uma renovação em aberto: {1}").format(self.dominio, outra))
 
 	@frappe.whitelist()
+	def criar_factura(self):
+		"""A draft Sales Invoice for this renewal (see dominios.criar_factura)."""
+		from entre_erp.dominios import criar_factura
+
+		return criar_factura(self.name)
+
+	@frappe.whitelist()
 	def marcar_como_pago(self, data_pagamento, valor_pago, comprovativo):
 		"""Pendente → Pago (the tech is told to renew), or Renovado → Concluído."""
 		exigir_papel("papel_pagamento")

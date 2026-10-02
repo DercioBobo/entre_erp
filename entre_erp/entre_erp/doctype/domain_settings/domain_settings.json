@@ -16,7 +16,11 @@
   "section_registo",
   "limite_consultas_hora",
   "column_break_registo",
-  "cache_minutos"
+  "cache_minutos",
+  "section_facturacao",
+  "item_dominio",
+  "column_break_facturacao",
+  "item_hospedagem"
  ],
  "fields": [
   {
@@ -96,11 +100,35 @@
    "fieldtype": "Int",
    "label": "Reutilizar uma resposta durante (minutos)",
    "non_negative": 1
+  },
+  {
+   "description": "Itens da factura (rascunho) criada a partir de uma renovação.",
+   "fieldname": "section_facturacao",
+   "fieldtype": "Section Break",
+   "label": "Facturação"
+  },
+  {
+   "default": "Dominio",
+   "fieldname": "item_dominio",
+   "fieldtype": "Link",
+   "label": "Item do domínio",
+   "options": "Item"
+  },
+  {
+   "fieldname": "column_break_facturacao",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Hospedagem de dominio",
+   "fieldname": "item_hospedagem",
+   "fieldtype": "Link",
+   "label": "Item da hospedagem",
+   "options": "Item"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-02 12:00:00.000000",
+ "modified": "2026-10-02 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Domain Settings",

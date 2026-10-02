@@ -132,6 +132,7 @@ class PainelDominios {
 						<button class="btn btn-primary btn-sm dm-novo" style="display:none">+ ${__("Novo domínio")}</button>
 					</div>
 				</div>
+				<div class="dm-registo-info"></div>
 				<div class="dm-cards"></div>
 				<div class="dm-corpo">
 					<div class="dm-coluna-lista">
@@ -195,6 +196,10 @@ class PainelDominios {
 			this.dias_abrir_renovacao = r.dias_abrir_renovacao;
 			this.$body.find(".dm-novo").toggle(!!r.pode_criar);
 			this.pode_criar = r.pode_criar;
+			this.pode_apagar = r.pode_apagar;
+			this.pode_facturar = r.pode_facturar;
+			this.registo = r.registo;
+			this.render_registo();
 			this.$body.find(".dm-definicoes").toggle(!!r.pode_configurar);
 			this.detalhes = {};
 			this.render_cards();
@@ -250,11 +255,31 @@ class PainelDominios {
 			.then((r) => {
 				this.consulta = r;
 				this.render_consulta();
+				if (r.registo) {
+					this.registo = r.registo;
+					this.render_registo();
+				}
 			})
 			.catch(() => {
 				this.consulta = { dominio, erro: __("Não foi possível consultar agora. Tente daqui a pouco.") };
 				this.render_consulta();
 			});
+	}
+
+	// The last registry query, by anyone or the weekly job, and this hour's allowance.
+	render_registo() {
+		const r = this.registo;
+		if (!r) return;
+		const ultima = r.ultima
+			? __("Última consulta ao registo: <b>{0}</b> {1}", [
+					dm_esc(r.ultima.dominio),
+					`<span title="${dm_esc(frappe.datetime.str_to_user(r.ultima.quando))}">${comment_when(r.ultima.quando)}</span>`,
+			  ])
+			: __("Sem consultas ao registo recentes");
+		const tom = r.nesta_hora >= r.limite ? "dm-texto-vermelho" : "";
+		this.$body.find(".dm-registo-info").html(
+			`${ultima} · <span class="${tom}">${__("{0} de {1} consultas nesta hora", [r.nesta_hora, r.limite])}</span>`
+		);
 	}
 
 	// --- list --------------------------------------------------------------
@@ -504,8 +529,16 @@ class PainelDominios {
 							? `<button class="btn btn-default btn-sm dm-nova-renovacao">${__("Nova renovação")}</button>`
 							: ""
 				}
+				${
+					d.factura
+						? `<button class="btn btn-default btn-sm dm-ver-factura">🧾 ${__("Factura {0}", [dm_esc(d.factura)])}</button>`
+						: this.pode_facturar && d.estado !== "Cancelado"
+							? `<button class="btn btn-default btn-sm dm-criar-factura">🧾 ${__("Criar factura")}</button>`
+							: ""
+				}
 				<button class="btn btn-default btn-sm dm-consultar-agora">↻ ${__("Consultar registo")}</button>
 				<button class="btn btn-default btn-sm dm-abrir-ficha">${__("Abrir ficha")}</button>
+				${this.pode_apagar ? `<button class="btn btn-default btn-sm dm-apagar" title="${__("Apagar domínio")}">🗑 ${__("Apagar")}</button>` : ""}
 			</div>
 
 			<div class="dm-seccao">
@@ -517,12 +550,13 @@ class PainelDominios {
 					${this.campo(__("Última renovação"), d.ultima_renovacao ? frappe.datetime.str_to_user(d.ultima_renovacao.split(" ")[0]) : "—")}
 					${this.campo(__("Período"), dm_esc(d.periodo || "—"))}
 					${this.campo(__("Valor"), d.valor ? format_currency(d.valor) : "—")}
+					${this.campo(__("Última factura"), d.ultima_factura ? `<a href="/app/sales-invoice/${encodeURIComponent(d.ultima_factura)}">${dm_esc(d.ultima_factura)}</a>` : "—")}
 				</div>
 			</div>
 
 			<div class="dm-seccao">
 				<div class="dm-seccao-titulo">${__("Registo")}
-					<span class="dm-muted dm-seccao-nota">${d.whois_last_checked ? __("consultado {0}", [comment_when(d.whois_last_checked)]) : __("nunca consultado")}</span>
+					<span class="dm-muted dm-seccao-nota">${d.whois_last_checked ? __("consultado {0} ({1})", [comment_when(d.whois_last_checked), dm_esc(frappe.datetime.str_to_user(d.whois_last_checked))]) : __("nunca consultado")}</span>
 				</div>
 				<div class="dm-grelha">
 					${this.campo(__("Registrar"), dm_esc(d.whois_registrar || "—"))}
@@ -560,6 +594,15 @@ class PainelDominios {
 				.then(() => frappe.show_alert({ message: __("Registo actualizado"), indicator: "green" }))
 				.finally(() => $b.prop("disabled", false));
 		});
+		$det.find(".dm-apagar").on("click", () => this.apagar(d));
+		$det.find(".dm-ver-factura").on("click", () => frappe.set_route("Form", "Sales Invoice", d.factura));
+		$det.find(".dm-criar-factura").on("click", (e) => {
+			$(e.currentTarget).prop("disabled", true);
+			frappe
+				.xcall("entre_erp.painel_dominios.criar_factura", { nome: d.name })
+				.then((factura) => frappe.set_route("Form", "Sales Invoice", factura))
+				.finally(() => $(e.currentTarget).prop("disabled", false));
+		});
 		$det.find(".dm-extra").on("click", ".dm-ver-registo", (e) => {
 			$(e.currentTarget).next(".dm-registo-bruto").toggle();
 		});
@@ -572,6 +615,23 @@ class PainelDominios {
 		}
 	}
 
+	apagar(d) {
+		const n = (this.detalhes[d.name]?.renovacoes || []).length;
+		const aviso = n
+			? __("As renovações deste domínio (pagamentos incluídos) também são apagadas.")
+			: "";
+		frappe.confirm(
+			`${__("Apagar <b>{0}</b>? Isto não se pode desfazer.", [dm_esc(d.name)])}<br>${aviso}
+			 <div class="dm-muted" style="margin-top:8px">${__("Para deixar de o seguir e manter o histórico, marque-o como Cancelado.")}</div>`,
+			() =>
+				frappe.xcall("entre_erp.painel_dominios.apagar_dominio", { nome: d.name }).then(() => {
+					frappe.show_alert({ message: __("{0} apagado", [d.name]), indicator: "green" });
+					this.fechar_detalhe();
+					this.carregar();
+				})
+		);
+	}
+
 	html_extra(extra) {
 		const renovacoes = extra.renovacoes.length
 			? extra.renovacoes
@@ -581,7 +641,7 @@ class PainelDominios {
 							<span>${dm_pilula(r.estado, DM_CORES_RENOVACAO[r.estado])}</span>
 							<span class="dm-renovacao-datas">${dm_data(r.expira_em)} → ${dm_data(r.nova_expiracao)}</span>
 							<span class="dm-muted">${r.confirmado_automaticamente ? __("auto") : r.sem_pagamento ? __("confiança") : ""}</span>
-							<span class="dm-renovacao-valor">${r.valor_pago ? format_currency(r.valor_pago) : ""}</span>
+							<span class="dm-renovacao-valor">${r.valor_pago ? format_currency(r.valor_pago) : r.factura ? "🧾" : ""}</span>
 						</a>`
 					)
 					.join("")
@@ -668,6 +728,8 @@ function dm_inject_styles() {
 			background: var(--fg-color);
 		}
 		.dm-topo-accoes { display: flex; gap: 8px; }
+		.dm-registo-info { font-size: 12px; color: var(--text-muted); margin: -8px 0 14px 4px; }
+		.dm-apagar:hover { color: var(--dm-vermelho); border-color: var(--dm-vermelho); }
 
 		/* filter cards */
 		.dm-cards { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }

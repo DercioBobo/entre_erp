@@ -41,6 +41,7 @@ CAMPOS = [
 	"whois_nameservers",
 	"whois_last_checked",
 	"whois_error",
+	"ultima_factura",
 ]
 
 # A domain as people type it: no scheme, no "www.", no path.
@@ -62,7 +63,7 @@ def obter_dominios():
 		for r in frappe.get_all(
 			"Domain Renewal",
 			filters={"estado": ["in", (*ABERTOS, RENOVADO)]},
-			fields=["name", "estado", "pago_em", "expira_no_registo"],
+			fields=["name", "estado", "pago_em", "expira_no_registo", "factura"],
 		)
 	}
 
@@ -72,14 +73,25 @@ def obter_dominios():
 		d.expira = expira
 		d.dias = (getdate(expira) - hoje).days if expira else None
 		d.dias_periodo = meses(d.periodo) * 30
-		d.alertas = _alertas(d, renovacoes.get(d.renovacao_actual), limite_pago)
+		renovacao = renovacoes.get(d.renovacao_actual)
+		d.factura = renovacao.factura if renovacao else None
+		d.alertas = _alertas(d, renovacao, limite_pago)
 
 	return {
 		"dominios": dominios,
 		"dias_abrir_renovacao": int(definicao("dias_abrir_renovacao")),
 		"pode_criar": frappe.has_permission("Domain Management", "create"),
+		"pode_apagar": frappe.has_permission("Domain Management", "delete"),
+		"pode_facturar": frappe.has_permission("Sales Invoice", "create"),
+		"registo": _estado_do_registo(),
 		"pode_configurar": frappe.has_permission("Domain Settings", "write"),
 	}
+
+
+def _estado_do_registo():
+	from entre_erp.whois import estado_do_registo
+
+	return estado_do_registo()
 
 
 def _alertas(d, renovacao, limite_pago):
@@ -128,6 +140,7 @@ def obter_detalhe(nome):
 				"renovado_em",
 				"confirmado_automaticamente",
 				"sem_pagamento",
+				"factura",
 			],
 			order_by="creation desc",
 			limit_page_length=10,
@@ -151,6 +164,34 @@ def consultar_agora(nome):
 
 	actualizar(nome)
 	return frappe.db.get_value("Domain Management", nome, CAMPOS, as_dict=True)
+
+
+@frappe.whitelist(methods=["POST"])
+def apagar_dominio(nome):
+	"""Delete a domain together with its renewals. Deleting renewals (payment
+	history) needs that permission too; otherwise mark the domain Cancelado."""
+	frappe.has_permission("Domain Management", "delete", nome, throw=True)
+	renovacoes = frappe.get_all("Domain Renewal", filters={"dominio": nome}, pluck="name")
+	if renovacoes and not frappe.has_permission("Domain Renewal", "delete"):
+		frappe.throw(
+			_("Este domínio tem {0} renovações registadas e não tem permissão para as apagar. Marque-o como Cancelado.").format(
+				len(renovacoes)
+			),
+			frappe.PermissionError,
+		)
+	# The domain points at its current renewal and every renewal at the domain.
+	frappe.db.set_value("Domain Management", nome, "renovacao_actual", None, update_modified=False)
+	for renovacao in renovacoes:
+		frappe.delete_doc("Domain Renewal", renovacao, ignore_permissions=True)
+	frappe.delete_doc("Domain Management", nome)
+
+
+@frappe.whitelist(methods=["POST"])
+def criar_factura(nome):
+	frappe.get_doc("Domain Management", nome).check_permission("write")
+	from entre_erp.dominios import facturar
+
+	return facturar(nome)
 
 
 @frappe.whitelist()
@@ -187,8 +228,8 @@ def consultar_dominio(dominio):
 		registo = consultar(dominio)
 	except DominioNaoEncontrado:
 		frappe.clear_messages()
-		return {"dominio": dominio, "gerido": gerido, "registado": False}
+		return {"dominio": dominio, "gerido": gerido, "registado": False, "registo": _estado_do_registo()}
 	except Exception as e:
 		frappe.clear_messages()
-		return {"dominio": dominio, "gerido": gerido, "erro": str(e)[:300]}
-	return {"dominio": dominio, "gerido": gerido, "registado": True, **registo}
+		return {"dominio": dominio, "gerido": gerido, "erro": str(e)[:300], "registo": _estado_do_registo()}
+	return {"dominio": dominio, "gerido": gerido, "registado": True, **registo, "registo": _estado_do_registo()}

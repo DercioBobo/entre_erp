@@ -42,6 +42,9 @@ SEGUIDOS = {
 }
 
 
+ULTIMA_CONSULTA = "entre_erp:whois:ultima_consulta"
+
+
 class DominioNaoEncontrado(frappe.ValidationError):
 	pass
 
@@ -65,6 +68,7 @@ def consultar(dominio, usar_cache=True):
 		return dict(guardado)
 
 	_aguardar_vez()
+	frappe.cache.set_value(ULTIMA_CONSULTA, {"dominio": dominio, "quando": now_datetime()})
 	validade = int(definicao("cache_minutos")) * 60
 	try:
 		valores = _perguntar_ao_registo(dominio)
@@ -76,12 +80,27 @@ def consultar(dominio, usar_cache=True):
 	return dict(valores)
 
 
+def _chave_hora():
+	return frappe.cache.make_key(f"entre_erp:whois:hora:{now_datetime():%Y%m%d%H}")
+
+
+def estado_do_registo():
+	"""The last registry query (from anyone or any job) and this hour's allowance."""
+	from entre_erp.dominios import definicao
+
+	return {
+		"ultima": frappe.cache.get_value(ULTIMA_CONSULTA),
+		"nesta_hora": int(frappe.cache.get(_chave_hora()) or 0),
+		"limite": int(definicao("limite_consultas_hora")),
+	}
+
+
 def _aguardar_vez():
 	"""One allowance per clock hour for all registry queries, and a minimum gap."""
 	from entre_erp.dominios import definicao
 
 	limite = int(definicao("limite_consultas_hora"))
-	chave_hora = frappe.cache.make_key(f"entre_erp:whois:hora:{now_datetime():%Y%m%d%H}")
+	chave_hora = _chave_hora()
 	if frappe.cache.incr(chave_hora) > limite:
 		frappe.throw(
 			_("Atingido o limite de {0} consultas ao registo nesta hora. Tente mais tarde.").format(limite),
