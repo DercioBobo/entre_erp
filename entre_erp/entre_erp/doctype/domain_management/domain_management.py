@@ -8,6 +8,9 @@ class DomainManagement(Document):
 		# Split into domain + hosting (the invoice lines): the total follows.
 		if self.valor_dominio or self.valor_hospedagem:
 			self.valor = flt(self.valor_dominio) + flt(self.valor_hospedagem)
+		# Unarchived by hand: the daily job leaves it visible from now on.
+		if self.has_value_changed("arquivado") and not self.is_new():
+			self.manter_visivel = int(not self.arquivado)
 
 	@frappe.whitelist()
 	def consultar_whois(self):

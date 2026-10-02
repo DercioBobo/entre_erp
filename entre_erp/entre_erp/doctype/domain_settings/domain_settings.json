@@ -13,6 +13,7 @@
   "dias_abrir_renovacao",
   "column_break_prazos",
   "dias_escalar",
+  "dias_arquivar",
   "section_registo",
   "limite_consultas_hora",
   "column_break_registo",
@@ -77,6 +78,13 @@
    "non_negative": 1
   },
   {
+   "default": "365",
+   "fieldname": "dias_arquivar",
+   "fieldtype": "Int",
+   "label": "Arquivar quando expirado ou cancelado há (dias)",
+   "non_negative": 1
+  },
+  {
    "description": "O registo .mz proíbe consultas automáticas em grande volume. Todas as consultas, de todos os utilizadores e tarefas, contam para o mesmo limite.",
    "fieldname": "section_registo",
    "fieldtype": "Section Break",
@@ -128,7 +136,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-02 18:00:00.000000",
+ "modified": "2026-10-02 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Domain Settings",

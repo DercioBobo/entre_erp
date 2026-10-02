@@ -32,6 +32,8 @@ PAUSA_ENTRE_CONSULTAS = 3
 # The weekly job checks these every week; the others about once a month.
 DIAS_PERTO_DE_EXPIRAR = 60
 DIAS_ENTRE_CONSULTAS_NORMAIS = 30
+# Archived domains: only to notice one that is back in use.
+DIAS_ENTRE_CONSULTAS_ARQUIVADOS = 90
 
 # Registry fields whose changes are written on the domain's timeline.
 SEGUIDOS = {
@@ -169,16 +171,29 @@ def actualizar_todos():
 
 def a_consultar():
 	"""Domains close to expiring, with a renewal in progress, expired, never
-	checked, or not checked for a month."""
+	checked, or not checked for a month; archived ones every three months."""
 	from entre_erp.dominios import CANCELADO, EXPIRADO, PAGO, PENDENTE
 
 	perto = getdate(add_days(today(), DIAS_PERTO_DE_EXPIRAR))
 	antigo = add_to_date(now_datetime(), days=-DIAS_ENTRE_CONSULTAS_NORMAIS)
+	arquivado_antigo = add_to_date(now_datetime(), days=-DIAS_ENTRE_CONSULTAS_ARQUIVADOS)
 	for d in frappe.get_all(
 		"Domain Management",
-		fields=["name", "estado", "data_de_fim", "whois_expiry_date", "whois_last_checked", "renovacao_estado"],
+		fields=[
+			"name",
+			"estado",
+			"arquivado",
+			"data_de_fim",
+			"whois_expiry_date",
+			"whois_last_checked",
+			"renovacao_estado",
+		],
 		order_by="whois_last_checked asc",
 	):
+		if d.arquivado:
+			if not d.whois_last_checked or get_datetime(d.whois_last_checked) < arquivado_antigo:
+				yield d.name
+			continue
 		expira = d.whois_expiry_date or d.data_de_fim
 		if (
 			not d.whois_last_checked

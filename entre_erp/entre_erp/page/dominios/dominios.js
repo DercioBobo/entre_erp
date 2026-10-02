@@ -93,6 +93,8 @@ class PainelDominios {
 
 	get filtros() {
 		const limite = this.dias_abrir_renovacao || 40;
+		// Archived domains only show under their own card (and in a search).
+		const visivel = (teste) => (d) => !d.arquivado && teste(d);
 		return [
 			{ id: "todos", rotulo: __("Ativos e expirados"), tom: "", teste: (d) => d.estado !== "Cancelado" },
 			{
@@ -112,7 +114,9 @@ class PainelDominios {
 				teste: (d) => d.alertas.some((a) => a.nivel !== "info"),
 			},
 			{ id: "cancelados", rotulo: __("Cancelados"), tom: "cinza", teste: (d) => d.estado === "Cancelado" },
-		];
+		]
+			.map((f) => ({ ...f, teste: visivel(f.teste) }))
+			.concat({ id: "arquivados", rotulo: __("Arquivados"), tom: "", teste: (d) => !!d.arquivado });
 	}
 
 	montar() {
@@ -344,7 +348,7 @@ class PainelDominios {
 		const alertas = d.alertas.filter((a) => a.nivel !== "info");
 		const pior = alertas.some((a) => a.nivel === "erro") ? "vermelho" : "laranja";
 		return `
-			<div class="dm-linha ${d.name === this.seleccionado ? "dm-linha-activa" : ""} ${d.estado === "Cancelado" ? "dm-linha-cancelada" : ""}" data-nome="${dm_esc(d.name)}" tabindex="-1">
+			<div class="dm-linha ${d.name === this.seleccionado ? "dm-linha-activa" : ""} ${d.estado === "Cancelado" || d.arquivado ? "dm-linha-cancelada" : ""}" data-nome="${dm_esc(d.name)}" tabindex="-1">
 				<div class="dm-linha-principal">
 					<div class="dm-nome">
 						${this.realcar(d.name)}
@@ -354,6 +358,7 @@ class PainelDominios {
 				</div>
 				<div class="dm-pilulas">
 					${d.estado !== "Ativo" ? dm_pilula(d.estado, DM_CORES_ESTADO[d.estado]) : ""}
+					${d.arquivado ? dm_pilula("Arquivado", "cinza") : ""}
 					${["Pendente", "Pago", "Renovado"].includes(d.renovacao_estado) ? dm_pilula(d.renovacao_estado, DM_CORES_RENOVACAO[d.renovacao_estado]) : ""}
 				</div>
 				<div class="dm-expira">
@@ -511,6 +516,7 @@ class PainelDominios {
 					${dm_pilula(d.estado, DM_CORES_ESTADO[d.estado])}
 					${d.renovacao_estado ? dm_pilula(d.renovacao_estado, DM_CORES_RENOVACAO[d.renovacao_estado]) : ""}
 					${d.nots === "Não" ? dm_pilula("Sem notificações", "cinza") : ""}
+					${d.arquivado ? dm_pilula("Arquivado", "cinza") : ""}
 				</div>
 			</div>
 
@@ -538,6 +544,7 @@ class PainelDominios {
 				}
 				<button class="btn btn-default btn-sm dm-consultar-agora">↻ ${__("Consultar registo")}</button>
 				<button class="btn btn-default btn-sm dm-abrir-ficha">${__("Abrir ficha")}</button>
+				<button class="btn btn-default btn-sm dm-arquivar">${d.arquivado ? __("Desarquivar") : __("Arquivar")}</button>
 				${this.pode_apagar ? `<button class="btn btn-default btn-sm dm-apagar" title="${__("Apagar domínio")}">🗑 ${__("Apagar")}</button>` : ""}
 			</div>
 
@@ -595,6 +602,19 @@ class PainelDominios {
 				.finally(() => $b.prop("disabled", false));
 		});
 		$det.find(".dm-apagar").on("click", () => this.apagar(d));
+		$det.find(".dm-arquivar").on("click", (e) => {
+			$(e.currentTarget).prop("disabled", true);
+			frappe
+				.xcall("entre_erp.painel_dominios.arquivar", { nome: d.name, arquivado: d.arquivado ? 0 : 1 })
+				.then(() => {
+					frappe.show_alert({
+						message: d.arquivado ? __("{0} desarquivado", [d.name]) : __("{0} arquivado", [d.name]),
+						indicator: "green",
+					});
+					return this.carregar();
+				})
+				.finally(() => $(e.currentTarget).prop("disabled", false));
+		});
 		$det.find(".dm-ver-factura").on("click", () => frappe.set_route("Form", "Sales Invoice", d.factura));
 		$det.find(".dm-criar-factura").on("click", (e) => {
 			$(e.currentTarget).prop("disabled", true);
@@ -732,7 +752,7 @@ function dm_inject_styles() {
 		.dm-apagar:hover { color: var(--dm-vermelho); border-color: var(--dm-vermelho); }
 
 		/* filter cards */
-		.dm-cards { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+		.dm-cards { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
 		.dm-card {
 			text-align: left; padding: 12px 14px; border-radius: var(--dm-raio); cursor: pointer;
 			background: var(--fg-color); border: 1px solid var(--border-color); transition: transform .1s, border-color .15s;

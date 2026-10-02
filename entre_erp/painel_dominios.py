@@ -26,6 +26,7 @@ CAMPOS = [
 	"telemovel",
 	"nots",
 	"estado",
+	"arquivado",
 	"pacote",
 	"periodo",
 	"valor",
@@ -97,7 +98,7 @@ def _estado_do_registo():
 def _alertas(d, renovacao, limite_pago):
 	"""What needs someone's attention on this domain, most serious first."""
 	alertas = []
-	if d.estado == CANCELADO:
+	if d.estado == CANCELADO or d.arquivado:
 		return alertas
 	for problema in problemas_no_registo(d.whois_status):
 		alertas.append({"nivel": "erro", "texto": problema})
@@ -192,6 +193,15 @@ def criar_factura(nome):
 	from entre_erp.dominios import facturar
 
 	return facturar(nome)
+
+
+@frappe.whitelist(methods=["POST"])
+def arquivar(nome, arquivado):
+	doc = frappe.get_doc("Domain Management", nome)
+	doc.check_permission("write")
+	doc.arquivado = int(arquivado)
+	doc.flags.ignore_mandatory = True
+	doc.save()
 
 
 @frappe.whitelist()

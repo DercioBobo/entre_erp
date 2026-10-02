@@ -39,6 +39,7 @@ PADROES = {
 	"papel_confianca": "System Manager",
 	"dias_abrir_renovacao": 40,
 	"dias_escalar": 3,
+	"dias_arquivar": 365,
 	"limite_consultas_hora": 30,
 	"cache_minutos": 15,
 	"item_dominio": "Dominio",
@@ -120,7 +121,7 @@ def depois_do_whois(dominio, valores, automatico=True):
 		)
 
 	if d.estado == EXPIRADO and expira >= getdate(today()):
-		frappe.db.set_value("Domain Management", dominio, "estado", ATIVO, update_modified=False)
+		frappe.db.set_value("Domain Management", dominio, {"estado": ATIVO, "arquivado": 0}, update_modified=False)
 		comentar(dominio, _("Válido no registo até {0}: passou de Expirado a Ativo.").format(frappe.format(expira, "Date")))
 
 	if not automatico:
@@ -159,7 +160,7 @@ def com_problemas_no_registo():
 	resultado = []
 	for d in frappe.get_all(
 		"Domain Management",
-		filters={"estado": ["!=", CANCELADO], "whois_status": ["is", "set"]},
+		filters={"estado": ["!=", CANCELADO], "arquivado": 0, "whois_status": ["is", "set"]},
 		fields=["name", "whois_status"],
 	):
 		if problemas := problemas_no_registo(d.whois_status):
@@ -275,6 +276,7 @@ def _nova_factura(d, inicio, fim, valor_renovacao, observacoes):
 def tarefa_diaria():
 	abrir_renovacoes()
 	marcar_expirados()
+	arquivar_antigos()
 	enviar_alertas()
 
 
@@ -282,7 +284,7 @@ def abrir_renovacoes():
 	"""Open a cycle for every active domain expiring within the configured days."""
 	limite = add_days(today(), int(definicao("dias_abrir_renovacao")))
 	for dominio in frappe.get_all(
-		"Domain Management", filters={"estado": ATIVO, "data_de_fim": ["<=", limite]}, pluck="name"
+		"Domain Management", filters={"estado": ATIVO, "arquivado": 0, "data_de_fim": ["<=", limite]}, pluck="name"
 	):
 		abrir_renovacao(dominio)
 		frappe.db.commit()
@@ -297,6 +299,21 @@ def marcar_expirados():
 		expira = d.whois_expiry_date or d.data_de_fim
 		if expira and getdate(expira) < hoje:
 			frappe.db.set_value("Domain Management", d.name, "estado", EXPIRADO, update_modified=False)
+
+
+def arquivar_antigos():
+	"""Expired or cancelled domains whose expiry is older than the configured
+	days, unless someone unarchived them by hand."""
+	limite = add_days(today(), -int(definicao("dias_arquivar")))
+	for d in frappe.get_all(
+		"Domain Management",
+		filters={"estado": ["in", (EXPIRADO, CANCELADO)], "arquivado": 0, "manter_visivel": 0},
+		fields=["name", "whois_expiry_date", "data_de_fim"],
+	):
+		expira = d.whois_expiry_date or d.data_de_fim
+		if expira and getdate(expira) < getdate(limite):
+			frappe.db.set_value("Domain Management", d.name, "arquivado", 1, update_modified=False)
+			comentar(d.name, _("Arquivado: expirou em {0}.").format(frappe.format(expira, "Date")))
 
 
 def renovacoes_atrasadas():
