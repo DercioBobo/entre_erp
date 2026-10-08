@@ -239,7 +239,35 @@ def obter_plano(plano):
 	if doc.tipo == "Mensal" and doc.estado != "Fechado":
 		resultado["bloqueio"] = bloqueio_do_mes_anterior(doc.ano, doc.mes)
 	resultado["caixa"] = resumo_caixa_do_plano(doc)
+	if doc.tipo == "Mensal":
+		resultado["facturado"] = facturado_no_mes(doc.ano, doc.mes)
 	return resultado
+
+
+def facturado_no_mes(ano, mes):
+	"""What was invoiced in the month: submitted Sales Invoices by posting
+	date, net of credit notes, in the company currency — the same figure as
+	the Painel Financeiro's Entradas previstas (when counted by invoice date).
+	None when the user can't read Sales Invoices."""
+	if not frappe.has_permission("Sales Invoice", "read"):
+		return None
+	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import definicao
+
+	company = (
+		definicao("empresa_padrao")
+		or frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+	)
+	return flt(
+		frappe.db.sql(
+			"""
+			select sum(base_grand_total)
+			from `tabSales Invoice`
+			where docstatus = 1 and company = %s and year(posting_date) = %s and month(posting_date) = %s
+			""",
+			(company, cint(ano), numero_mes(mes)),
+		)[0][0]
+	)
 
 
 @frappe.whitelist()

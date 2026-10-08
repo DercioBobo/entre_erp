@@ -607,8 +607,12 @@ class CashflowSheet {
 			this.$conteudo.find(".cf-salto-caixa").html(this.html_chip_caixa());
 		}
 		const pct = p.total_previsto ? Math.min(100, Math.round((p.total_pago / p.total_previsto) * 100)) : 0;
+		// Invoiced in the month comes with the plan load only (edits don't change it).
+		const facturado = this.doc ? this.doc.facturado : null;
+		const tem_facturado = facturado !== null && facturado !== undefined;
 		this.$conteudo.find(".cf-cabecalho").html(`
-			<div class="cf-kpis">
+			<div class="cf-kpis ${tem_facturado ? "cf-kpis-5" : ""}">
+				${tem_facturado ? `<div class="cf-kpi"><div class="cf-kpi-label">${__("Facturado no mês")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(facturado)}</div></div>` : ""}
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Total Previsto")}</div><div class="cf-kpi-valor">${dinheiro(p.total_previsto)}</div></div>
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Total Pago")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(p.total_pago)}</div></div>
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Remanescente")}</div><div class="cf-kpi-valor ${p.total_remanescente > 0 ? "cf-laranja" : ""}">${dinheiro(p.total_remanescente)}</div></div>
