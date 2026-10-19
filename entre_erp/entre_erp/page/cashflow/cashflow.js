@@ -326,7 +326,7 @@ class CashflowSheet {
 			else texto = $td.text().trim();
 			if (texto === "—") texto = "";
 			const e_numero = numerica || $td.hasClass("cf-num") || $campo.hasClass("cf-dinheiro");
-			return e_numero && texto !== "" ? flt(texto) : texto;
+			return e_numero && texto !== "" ? avaliar_formula(texto) : texto;
 		};
 		const ler_linha = (tr) => {
 			const tds = $(tr).children("td").get();
@@ -563,7 +563,7 @@ class CashflowSheet {
 		return `
 			<tr data-name="${esc(row.name)}" data-origem="${esc(row.linha_origem || "")}" data-idx="${row.idx}" data-seccao="${e_fixa(row) ? "fixa" : "outra"}" class="cf-estado-${ESTADO_CLASS[row.estado] || "pendente"} ${caixa_sem_reforco(row) ? "cf-caixa-sem-reforco" : ""}">
 				<td class="cf-idx">${so_leitura ? "" : `<span class="cf-arrastar" title="${__("Arrastar para reordenar")}">⠿</span>`}<span class="cf-n">${idx}</span>${so_leitura ? "" : `<input type="checkbox" class="cf-sel">`}</td>
-				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura || this.campo_de_pagamento_bloqueado(c.campo))}</td>`).join("")}
+				${COLUNAS_PLANO.map((c) => `<td class="cf-col-${c.campo} ${c.fixa ? "cf-fixa" : ""}">${html_celula(c, row[c.campo], this, so_leitura || this.campo_de_pagamento_bloqueado(c.campo), formula_de(row, c.campo))}</td>`).join("")}
 				<td class="cf-acoes">${this.html_acoes(row, so_leitura)}</td>
 			</tr>`;
 	}
@@ -657,7 +657,8 @@ class CashflowSheet {
 			const valor = ler_celula(coluna, $el);
 
 			if (coluna.campo === "estado") definir_classe_estado($tr, valor);
-			this.guardar_campo_linha($tr.attr("data-name"), coluna.campo, valor);
+			const formula = coluna.tipo === "num" ? formula_da_celula($el) : undefined;
+			this.guardar_campo_linha($tr.attr("data-name"), coluna.campo, valor, formula);
 		});
 
 		$c.on("focus input", "tbody .cf-cell-link", (e) => this.buscar_link(e.currentTarget));
@@ -687,9 +688,10 @@ class CashflowSheet {
 			el.type = "text";
 			el.value = data_utilizador(el.dataset.iso);
 		});
+		$c.on("focus", "tbody .cf-dinheiro", (e) => mostrar_formula(e.currentTarget));
 		$c.on("blur", "tbody .cf-dinheiro", (e) => {
 			const $el = $(e.currentTarget);
-			const v = flt($el.val());
+			const v = avaliar_formula($el.val());
 			$el.val(v ? dinheiro(v) : "");
 		});
 
@@ -965,10 +967,10 @@ class CashflowSheet {
 		this.$menu_link = null;
 	}
 
-	guardar_campo_linha(nome, campo, valor) {
+	guardar_campo_linha(nome, campo, valor, formula) {
 		return this.guardar(() =>
 			frappe
-				.xcall(API + "atualizar_linha", { plano: this.doc.name, linha: nome, campo, valor })
+				.xcall(API + "atualizar_linha", { plano: this.doc.name, linha: nome, campo, valor, formula })
 				.then((r) => {
 					this.atualizar_linha_na_grelha(this.$conteudo.find(`tbody tr[data-name="${nome}"]`), r.linha);
 					this.ordenar_grelha(nome);
@@ -988,7 +990,7 @@ class CashflowSheet {
 		$tr.find(".cf-cell").each((_i, el) => {
 			if (el === document.activeElement) return;
 			const coluna = COLUNAS_PLANO.find((c) => c.campo === el.getAttribute("data-campo"));
-			escrever_celula(coluna, $(el), linha[coluna.campo]);
+			escrever_celula(coluna, $(el), linha[coluna.campo], formula_de(linha, coluna.campo));
 		});
 	}
 
@@ -1075,7 +1077,7 @@ class CashflowSheet {
 				const estado = ler_estado(tr);
 				if (estado === "Pago" || ESTADOS_FORA_DO_MES.includes(estado) || tr.classList.contains("cf-caixa-sem-reforco")) return;
 				const $tr = $(tr);
-				falta += Math.max(0, flt($tr.find('[data-campo="valor"]').val()) - flt($tr.find('[data-campo="valor_pago"]').val()));
+				falta += Math.max(0, avaliar_formula($tr.find('[data-campo="valor"]').val()) - avaliar_formula($tr.find('[data-campo="valor_pago"]').val()));
 			});
 			$(cab)
 				.toggle($linhas.length > 0)
@@ -1554,7 +1556,7 @@ class CashflowSheet {
 		this.$conteudo.find("tbody tr[data-name]").each((_i, tr) => {
 			const $tr = $(tr);
 			$tr.removeClass("cf-duplicado");
-			const valor = flt($tr.find('[data-campo="valor"]').val());
+			const valor = avaliar_formula($tr.find('[data-campo="valor"]').val());
 			if (!valor || $tr.attr("data-origem") || $tr.find('[data-campo="estado"]').val() === "Cancelado") return;
 			const chave = `${normalizar($tr.find('[data-campo="descricao"]').val())}|${valor}`;
 			grupos.set(chave, (grupos.get(chave) || []).concat([$tr]));
@@ -1659,9 +1661,9 @@ class CashflowSheet {
 		let pago = 0;
 		this.$conteudo.find("tbody tr[data-name]:visible").each((_i, tr) => {
 			const $tr = $(tr);
-			const valor_pago = flt($tr.find('[data-campo="valor_pago"]').val());
+			const valor_pago = avaliar_formula($tr.find('[data-campo="valor_pago"]').val());
 			const estado = $tr.find('[data-campo="estado"]').val();
-			total += ESTADOS_FORA_DO_MES.includes(estado) ? valor_pago : flt($tr.find('[data-campo="valor"]').val());
+			total += ESTADOS_FORA_DO_MES.includes(estado) ? valor_pago : avaliar_formula($tr.find('[data-campo="valor"]').val());
 			pago += valor_pago;
 		});
 		$label.text(__("TOTAL (filtrado)"));
@@ -2067,7 +2069,7 @@ class CashflowSheet {
 		return `
 			<tr data-name="${esc(m.name)}" class="${m.tipo === "Reforço" ? "cf-reforco" : ""}">
 				<td class="cf-idx">${idx}</td>
-				${COLUNAS_CAIXA.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, m[c.campo], this, do_plano && c.campo !== "observacoes" && c.campo !== "categoria")}</td>`).join("")}
+				${COLUNAS_CAIXA.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, m[c.campo], this, do_plano && c.campo !== "observacoes" && c.campo !== "categoria", formula_de(m, c.campo))}</td>`).join("")}
 				<td class="cf-num cf-saldo"></td>
 				<td class="cf-acoes">${
 					do_plano
@@ -2100,7 +2102,7 @@ class CashflowSheet {
 		let saldo = this.caixa.resumo.saldo_inicial;
 		this.$conteudo.find("tbody tr[data-name]").each((_i, tr) => {
 			const $tr = $(tr);
-			const valor = flt($tr.find('[data-campo="valor"]').val());
+			const valor = avaliar_formula($tr.find('[data-campo="valor"]').val());
 			const reforco = $tr.find('[data-campo="tipo"]').val() === "Reforço";
 			saldo += reforco ? valor : -valor;
 			$tr.toggleClass("cf-reforco", reforco);
@@ -2133,6 +2135,7 @@ class CashflowSheet {
 			const $el = $(e.currentTarget);
 			const coluna = COLUNAS_CAIXA.find((c) => c.campo === $el.attr("data-campo"));
 			const valor = ler_celula(coluna, $el);
+			const formula = coluna.tipo === "num" ? formula_da_celula($el) : undefined;
 			this.recalcular_saldos_caixa();
 			this.guardar(() =>
 				frappe
@@ -2140,6 +2143,7 @@ class CashflowSheet {
 						nome: $el.closest("tr").attr("data-name"),
 						campo: coluna.campo,
 						valor,
+						formula,
 						...args(),
 					})
 					.then((r) => this.render_resumo_caixa(r.resumo)),
@@ -2167,8 +2171,9 @@ class CashflowSheet {
 			el.type = "text";
 			el.value = data_utilizador(el.dataset.iso);
 		});
+		$c.on("focus", "tbody .cf-dinheiro", (e) => mostrar_formula(e.currentTarget));
 		$c.on("blur", "tbody .cf-dinheiro", (e) => {
-			const v = flt($(e.currentTarget).val());
+			const v = avaliar_formula($(e.currentTarget).val());
 			$(e.currentTarget).val(v ? dinheiro(v) : "");
 		});
 
@@ -2211,7 +2216,7 @@ class CashflowSheet {
 		frappe
 			.xcall("frappe.client.get_list", {
 				doctype: "Despesa Recorrente",
-				fields: ["name"].concat(COLUNAS_RECORRENTES.map((c) => c.campo)),
+				fields: ["name", "formulas"].concat(COLUNAS_RECORRENTES.map((c) => c.campo)),
 				order_by: "categoria asc, despesa asc",
 				limit_page_length: 0,
 			})
@@ -2237,7 +2242,7 @@ class CashflowSheet {
 						.map(
 							(r, i) => `<tr data-name="${esc(r.name)}" class="${r.ativo ? "" : "cf-inativo"}">
 								<td class="cf-idx">${i + 1}</td>
-								${COLUNAS_RECORRENTES.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, r[c.campo], this)}</td>`).join("")}
+								${COLUNAS_RECORRENTES.map((c) => `<td class="${c.fixa ? "cf-fixa" : ""}">${html_celula(c, r[c.campo], this, false, formula_de(r, c.campo))}</td>`).join("")}
 								<td class="cf-acoes"><button class="btn btn-xs btn-link cf-remover" title="${__("Remover")}">×</button></td>
 							</tr>`,
 						)
@@ -2256,17 +2261,23 @@ class CashflowSheet {
 			const coluna = COLUNAS_RECORRENTES.find((c) => c.campo === $el.attr("data-campo"));
 			const valor = ler_celula(coluna, $el);
 			if (coluna.campo === "ativo") $tr.toggleClass("cf-inativo", !valor);
+			// Valor Padrão is the only money field, so it owns the whole formulas map.
+			const formula = coluna.tipo === "num" ? formula_da_celula($el) : null;
 			this.guardar(() =>
 				frappe.xcall("frappe.client.set_value", {
 					doctype: "Despesa Recorrente",
 					name: $tr.attr("data-name"),
-					fieldname: coluna.campo,
+					fieldname:
+						coluna.tipo === "num"
+							? { [coluna.campo]: valor, formulas: formula ? JSON.stringify({ [coluna.campo]: formula }) : null }
+							: coluna.campo,
 					value: valor,
 				}),
 			);
 		});
+		$c.on("focus", "tbody .cf-dinheiro", (e) => mostrar_formula(e.currentTarget));
 		$c.on("blur", "tbody .cf-dinheiro", (e) => {
-			const v = flt($(e.currentTarget).val());
+			const v = avaliar_formula($(e.currentTarget).val());
 			$(e.currentTarget).val(v ? dinheiro(v) : "");
 		});
 		$c.on("keydown", ".cf-nova-input", (e) => {
@@ -2303,14 +2314,14 @@ class CashflowSheet {
 // Cells
 // ----------------------------------------------------------------------
 
-function html_celula(coluna, valor, sheet, desativado = false) {
+function html_celula(coluna, valor, sheet, desativado = false, formula = "") {
 	const attrs = `class="cf-cell ${coluna.tipo === "num" || coluna.tipo === "int" ? "cf-num" : ""}" data-campo="${coluna.campo}" ${
 		desativado || coluna.so_leitura ? "disabled" : ""
 	}`;
 
 	switch (coluna.tipo) {
 		case "num":
-			return `<input ${attrs.replace('class="cf-cell ', 'class="cf-cell cf-dinheiro ')} inputmode="decimal" value="${valor ? esc(dinheiro(valor)) : ""}">`;
+			return `<input ${attrs.replace('class="cf-cell ', `class="cf-cell cf-dinheiro ${formula ? "cf-com-formula " : ""}`)} inputmode="decimal" ${attrs_formula(formula, valor)} value="${valor ? esc(dinheiro(valor)) : ""}">`;
 		case "int":
 			return `<input ${attrs} inputmode="numeric" value="${valor ? esc(valor) : ""}">`;
 		case "date":
@@ -2343,10 +2354,107 @@ function ler_celula(coluna, $el) {
 		if (el.type === "date") el.dataset.iso = el.value;
 		return el.dataset.iso || "";
 	}
-	if (coluna.tipo === "num") return flt($el.val());
+	if (coluna.tipo === "num") return avaliar_formula($el.val());
 	if (coluna.tipo === "int") return cint($el.val());
 	if (coluna.tipo === "check") return $el.is(":checked") ? 1 : 0;
 	return $el.val();
+}
+
+// ----------------------------------------------------------------------
+// Formulas in money cells: type 3000+1500 and the cell keeps 4.500,00;
+// hovering shows the calculation and focusing the cell brings it back to edit.
+// ----------------------------------------------------------------------
+
+// Value of what was typed: a calculation (+ - * / and brackets, numbers in
+// the user's number format, optional leading "=") or a plain number.
+function avaliar_formula(texto) {
+	const resultado = calcular(texto);
+	return resultado === null ? flt(texto) : resultado;
+}
+
+// The calculation typed in the cell, or "" when it's just a number.
+function formula_digitada(texto) {
+	const t = String(texto || "").replace(/\s+/g, "").replace(/^=/, "");
+	if (!/[+\-*/()]/.test(t.slice(1)) && !t.startsWith("(")) return "";
+	return calcular(t) === null ? "" : t;
+}
+
+function calcular(texto) {
+	const t = String(texto || "").replace(/\s+/g, "").replace(/^=/, "");
+	if (!t) return null;
+	const tokens = t.match(/[0-9.,]+|[+\-*/()]/g);
+	if (!tokens || tokens.join("") !== t) return null;
+	let i = 0;
+	const fator = () => {
+		const tk = tokens[i++];
+		if (tk === "-") return -fator();
+		if (tk === "+") return fator();
+		if (tk === "(") {
+			const v = soma();
+			if (tokens[i++] !== ")") throw new Error();
+			return v;
+		}
+		if (tk === undefined || !/[0-9]/.test(tk)) throw new Error();
+		return flt(tk);
+	};
+	const produto = () => {
+		let v = fator();
+		while (tokens[i] === "*" || tokens[i] === "/") {
+			const op = tokens[i++];
+			const d = fator();
+			if (op === "/" && !d) throw new Error();
+			v = op === "*" ? v * d : v / d;
+		}
+		return v;
+	};
+	const soma = () => {
+		let v = produto();
+		while (tokens[i] === "+" || tokens[i] === "-") v = tokens[i++] === "+" ? v + produto() : v - produto();
+		return v;
+	};
+	try {
+		const v = soma();
+		return i === tokens.length && isFinite(v) ? flt(v, 2) : null;
+	} catch (e) {
+		return null;
+	}
+}
+
+// The saved formula of a field, only while it still gives the saved value
+// (the server may change the amount itself, e.g. Valor Pago when set to Pago).
+function formula_de(doc, campo) {
+	let formulas;
+	try {
+		formulas = JSON.parse((doc && doc.formulas) || "{}") || {};
+	} catch (e) {
+		return "";
+	}
+	const f = formulas[campo];
+	return f && calcular(f) === flt(doc[campo], 2) ? f : "";
+}
+
+function attrs_formula(formula, valor) {
+	return formula ? `data-formula="${esc(formula)}" title="${esc(`${formula} = ${dinheiro(valor)}`)}"` : "";
+}
+
+function marcar_formula($el, formula, valor) {
+	$el.toggleClass("cf-com-formula", !!formula);
+	if (formula) $el.attr({ "data-formula": formula, title: `${formula} = ${dinheiro(valor)}` });
+	else $el.removeAttr("data-formula title");
+}
+
+// After typing in a money cell: remember (or forget) its formula on the
+// input and return it, to be saved with the value.
+function mostrar_formula(el) {
+	if (el.disabled || !el.dataset.formula) return;
+	el.value = el.dataset.formula;
+	el.select();
+}
+
+function formula_da_celula($el) {
+	const formula = formula_digitada($el.val());
+	marcar_formula($el, formula, avaliar_formula($el.val()));
+	return formula;
 }
 
 // Hidden columns are a per-viewer preference, remembered in this browser.
@@ -2467,7 +2575,7 @@ function data_utilizador(iso) {
 	return iso ? frappe.datetime.str_to_user(iso) : "";
 }
 
-function escrever_celula(coluna, $el, valor) {
+function escrever_celula(coluna, $el, valor, formula = "") {
 	if (coluna.tipo === "date") {
 		$el[0].dataset.iso = valor || "";
 		$el.val(data_utilizador(valor));
@@ -2478,7 +2586,10 @@ function escrever_celula(coluna, $el, valor) {
 		$el.siblings(".cf-link-abrir").attr("href", url_link(coluna, valor)).toggle(!!valor);
 		return;
 	}
-	if (coluna.tipo === "num") return $el.val(valor ? dinheiro(valor) : "");
+	if (coluna.tipo === "num") {
+		marcar_formula($el, formula, valor);
+		return $el.val(valor ? dinheiro(valor) : "");
+	}
 	if (coluna.tipo === "check") return $el.prop("checked", !!valor);
 	$el.val(valor == null ? "" : valor);
 }
@@ -2746,6 +2857,7 @@ function inject_styles() {
 
 		.cf-nova td { background: var(--fg-color); }
 		.cf-nova-input { font-style: italic; }
+		input.cf-com-formula:not(:focus) { background-image: linear-gradient(225deg, var(--primary) 5px, transparent 5px); }
 		.cf-total td { font-weight: 700; padding: 8px; background: var(--subtle-fg, var(--bg-color)); font-variant-numeric: tabular-nums; }
 		.cf-grelha tfoot .cf-total td { position: sticky; bottom: 0; z-index: 1; }
 		.cf-grelha tfoot .cf-total .cf-fixa { z-index: 2; }
