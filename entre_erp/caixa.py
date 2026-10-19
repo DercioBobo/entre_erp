@@ -23,6 +23,7 @@ from entre_erp.pagamentos import (
 	ESTADO_PARCIAL,
 	MESES,
 	bloqueio_do_mes_anterior,
+	definir_formula,
 	e_linha_de_caixa,
 	nome_plano,
 	numero_mes,
@@ -116,7 +117,7 @@ def obter_caixa(ano, mes):
 	movimentos = frappe.get_all(
 		"Movimento de Caixa",
 		filters={"data": ["between", (inicio, fim)]},
-		fields=["name", "data", "tipo", "descricao", "valor", "categoria", "observacoes", "plano", "linha_plano"],
+		fields=["name", "data", "tipo", "descricao", "valor", "categoria", "observacoes", "plano", "linha_plano", "formulas"],
 		order_by="data asc, creation asc",
 	)
 	return {
@@ -210,11 +211,13 @@ def adicionar_movimento(ano, mes, descricao, tipo=GASTO):
 
 
 @frappe.whitelist()
-def atualizar_movimento(nome, campo, valor, ano, mes):
+def atualizar_movimento(nome, campo, valor, ano, mes, formula=None):
 	if campo not in CAMPOS_EDITAVEIS:
 		frappe.throw(_("Campo não editável: {0}").format(campo))
 	doc = frappe.get_doc("Movimento de Caixa", nome)
 	doc.set(campo, flt(valor) if campo == "valor" else (valor or None))
+	if campo == "valor":
+		definir_formula(doc, campo, formula)
 	doc.save()
 	return {"movimento": doc.as_dict(), "resumo": resumo(int(ano), mes)}
 

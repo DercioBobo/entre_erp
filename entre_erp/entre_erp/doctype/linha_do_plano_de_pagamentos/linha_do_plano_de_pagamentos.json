@@ -21,7 +21,8 @@
   "section_break_obs",
   "observacoes",
   "linha_origem",
-  "movida_de"
+  "movida_de",
+  "formulas"
  ],
  "fields": [
   {
@@ -150,10 +151,17 @@
    "read_only": 1,
    "no_copy": 1,
    "description": "Plano de onde a linha foi movida (Investimentos ↔ mês)."
+  },
+  {
+   "fieldname": "formulas",
+   "fieldtype": "Small Text",
+   "label": "Fórmulas",
+   "hidden": 1,
+   "description": "Cálculos escritos nas células do Cashflow (ex.: 3000+1500), por campo, em JSON."
   }
  ],
  "links": [],
- "modified": "2026-09-28 00:00:00.000000",
+ "modified": "2026-10-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Linha do Plano de Pagamentos",

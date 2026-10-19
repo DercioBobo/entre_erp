@@ -14,7 +14,8 @@
   "section_break_obs",
   "observacoes",
   "plano",
-  "linha_plano"
+  "linha_plano",
+  "formulas"
  ],
  "fields": [
   {
@@ -85,10 +86,17 @@
    "hidden": 1,
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "formulas",
+   "fieldtype": "Small Text",
+   "label": "Fórmulas",
+   "hidden": 1,
+   "description": "Cálculos escritos nas células do Cashflow (ex.: 3000+1500), por campo, em JSON."
   }
  ],
  "links": [],
- "modified": "2026-09-26 00:00:00.000000",
+ "modified": "2026-10-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Movimento de Caixa",

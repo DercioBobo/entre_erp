@@ -281,10 +281,12 @@ def criar_plano(ano, tipo="Mensal", mes=None):
 
 
 @frappe.whitelist()
-def atualizar_linha(plano, linha, campo, valor=None):
+def atualizar_linha(plano, linha, campo, valor=None, formula=None):
 	doc = _plano_editavel(plano)
 	row = _linha(doc, linha)
 	_aplicar(row, campo, valor)
+	if campo in CAMPOS_NUMERICOS:
+		definir_formula(row, campo, formula)
 	doc.save()
 	return {"linha": row.as_dict(), "plano": _cabecalho(doc), "transporte": doc.flags.transporte}
 
@@ -299,6 +301,8 @@ def atualizar_linhas(plano, linhas, valores):
 		row = _linha(doc, nome)
 		for campo, valor in valores.items():
 			_aplicar(row, campo, valor)
+			if campo in CAMPOS_NUMERICOS:
+				definir_formula(row, campo)
 	doc.save()
 	return _resposta_completa(doc)
 
@@ -526,6 +530,18 @@ def _aplicar(row, campo, valor):
 			row.valor_pago = 0
 
 	row.set(campo, valor or (0 if campo in CAMPOS_NUMERICOS else None))
+
+
+def definir_formula(doc, campo, formula=None):
+	"""Remember the calculation typed in a money cell (e.g. 3000+1500), so
+	the sheet can show it again. Typing a plain number forgets it."""
+	formulas = frappe.parse_json(doc.get("formulas") or "{}") or {}
+	formula = (formula or "").strip()[:200]
+	if formula:
+		formulas[campo] = formula
+	else:
+		formulas.pop(campo, None)
+	doc.formulas = frappe.as_json(formulas, indent=None) if formulas else None
 
 
 def _resposta_completa(doc):
