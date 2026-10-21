@@ -612,11 +612,25 @@ class CashflowSheet {
 		const recebido = this.doc ? this.doc.recebido : null;
 		const tem_facturado = facturado !== null && facturado !== undefined;
 		const tem_recebido = recebido !== null && recebido !== undefined;
-		const extras = tem_facturado + tem_recebido;
+		// Margin: invoiced minus planned expenses; the real one is received minus paid.
+		const margem = flt(facturado) - flt(p.total_previsto);
+		const margem_pct = facturado ? Math.round((margem / facturado) * 100) : null;
+		const margem_real = flt(recebido) - flt(p.total_pago);
+		const cor = (v) => (v < 0 ? "cf-vermelho" : "cf-verde");
+		const extras = tem_facturado * 2 + tem_recebido;
 		this.$conteudo.find(".cf-cabecalho").html(`
 			<div class="cf-kpis ${extras ? `cf-kpis-${4 + extras}` : ""}">
 				${tem_facturado ? `<div class="cf-kpi"><div class="cf-kpi-label">${__("Facturado no mês")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(facturado)}</div></div>` : ""}
 				${tem_recebido ? `<div class="cf-kpi" title="${__("Recebimentos de clientes (Payment Entry) e vendas POS pagas neste mês")}"><div class="cf-kpi-label">${__("Recebido no mês")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(recebido)}</div></div>` : ""}
+				${
+					tem_facturado
+						? `<div class="cf-kpi" title="${__("Facturado no mês − Total Previsto")}${tem_recebido ? ` · ${__("Real: Recebido no mês − Total Pago")}` : ""}">
+							<div class="cf-kpi-label">${__("Margem")}${margem_pct !== null ? ` ${margem_pct}%` : ""}</div>
+							<div class="cf-kpi-valor ${cor(margem)}">${dinheiro(margem)}</div>
+							${tem_recebido ? `<div class="cf-kpi-sub">${__("Real")} <span class="${cor(margem_real)}">${dinheiro(margem_real)}</span></div>` : ""}
+						</div>`
+						: ""
+				}
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Total Previsto")}</div><div class="cf-kpi-valor">${dinheiro(p.total_previsto)}</div></div>
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Total Pago")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(p.total_pago)}</div></div>
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Remanescente")}</div><div class="cf-kpi-valor ${p.total_remanescente > 0 ? "cf-laranja" : ""}">${dinheiro(p.total_remanescente)}</div></div>
@@ -2808,6 +2822,8 @@ function inject_styles() {
 		.cf-caixa-topo .cf-ajuda { margin: 0; font-size: 12px; }
 		.cf-kpis.cf-kpis-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 		.cf-kpis.cf-kpis-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+		.cf-kpis.cf-kpis-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+		.cf-kpi-sub { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 		.cf-vermelho { color: var(--cf-vermelho) !important; }
 		.cf-reforco > td:first-child { box-shadow: inset 3px 0 0 var(--cf-verde) !important; }
 		.cf-reforco [data-campo="tipo"], .cf-reforco [data-campo="valor"] { color: var(--cf-verde); font-weight: 600; }
@@ -2908,7 +2924,7 @@ function inject_styles() {
 		.cf-ponto-pendente { background: var(--cf-laranja); }
 
 		@media (max-width: 768px) {
-			.cf-kpis, .cf-kpis.cf-kpis-5, .cf-kpis.cf-kpis-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+			.cf-kpis, .cf-kpis.cf-kpis-5, .cf-kpis.cf-kpis-6, .cf-kpis.cf-kpis-7 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 			.cf-kpi-valor { font-size: 16px; }
 			.cf-grelha-wrap { max-height: none; }
 		}
