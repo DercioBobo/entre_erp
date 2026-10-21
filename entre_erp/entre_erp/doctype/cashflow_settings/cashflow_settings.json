@@ -12,6 +12,11 @@
   "despesa_caixa",
   "column_break_caixa",
   "aviso_saldo_caixa",
+  "section_folha",
+  "componente_inss",
+  "prefixo_irps",
+  "column_break_folha",
+  "taxa_inss_empresa",
   "section_painel",
   "entradas_previstas_por",
   "column_break_painel",
@@ -80,6 +85,37 @@
    "fieldtype": "Currency",
    "label": "Avisar quando o saldo da Caixa ficar abaixo de",
    "description": "0 = sem aviso."
+  },
+  {
+   "fieldname": "section_folha",
+   "fieldtype": "Section Break",
+   "label": "Folha (Salários, INSS, IRPS)",
+   "description": "Para as Despesas Recorrentes com Fonte do Valor = Folha."
+  },
+  {
+   "fieldname": "componente_inss",
+   "fieldtype": "Link",
+   "label": "Componente INSS (desconto do trabalhador)",
+   "options": "Salary Component",
+   "default": "Segurança Social"
+  },
+  {
+   "fieldname": "prefixo_irps",
+   "fieldtype": "Data",
+   "label": "Componentes IRPS começam por",
+   "default": "IRPS",
+   "description": "Ex.: IRPS, IRPS 0 Dependentes, IRPS 1 Dependentes…"
+  },
+  {
+   "fieldname": "column_break_folha",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "taxa_inss_empresa",
+   "fieldtype": "Percent",
+   "label": "INSS a cargo da empresa (%)",
+   "default": "4",
+   "description": "Sobre os rendimentos tributáveis de quem tem desconto de INSS. Soma-se ao desconto do trabalhador na linha INSS."
   },
   {
    "fieldname": "section_painel",
@@ -190,7 +226,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-09-26 00:00:00.000000",
+ "modified": "2026-10-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Cashflow Settings",

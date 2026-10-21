@@ -12,6 +12,7 @@
   "valor_padrao",
   "tipo_valor",
   "fonte",
+  "funcionarios",
   "prioridade",
   "metodo_pagamento",
   "section_break_ref",
@@ -73,9 +74,17 @@
    "fieldname": "fonte",
    "fieldtype": "Select",
    "label": "Fonte do Valor",
-   "options": "Manual\nFolha: Salários líquidos",
+   "options": "Manual\nFolha: Salários líquidos\nFolha: INSS\nFolha: IRPS",
    "default": "Manual",
-   "description": "Folha: o valor de cada mês vem dos recibos de vencimento submetidos (enquanto a linha não estiver paga)."
+   "description": "Folha: o valor vem dos recibos de vencimento submetidos (enquanto a linha não estiver paga). Salários: folha do próprio mês. INSS (trabalhador + empresa) e IRPS: folha do mês anterior."
+  },
+  {
+   "fieldname": "funcionarios",
+   "fieldtype": "Table MultiSelect",
+   "label": "Só estes funcionários",
+   "options": "Despesa Recorrente Funcionario",
+   "depends_on": "eval:doc.fonte && doc.fonte != 'Manual'",
+   "description": "Vazio: todos os funcionários que não estejam noutra despesa com a mesma fonte (ex.: INSS-DH só com um funcionário, INSS com os restantes)."
   },
   {
    "fieldname": "prioridade",
@@ -110,7 +119,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-21 00:00:00.000000",
+ "modified": "2026-10-21 00:00:01.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Despesa Recorrente",
