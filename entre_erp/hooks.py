@@ -51,6 +51,10 @@ doc_events = {
         "on_trash": "entre_erp.dominios.ao_apagar_factura",
         "on_cancel": "entre_erp.dominios.ao_apagar_factura",
     },
+    "Salary Slip": {
+        "on_submit": "entre_erp.folha.ao_mudar_recibo",
+        "on_cancel": "entre_erp.folha.ao_mudar_recibo",
+    },
 }
 
 # ---------------------------------------------------------------------------

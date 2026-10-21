@@ -10,3 +10,4 @@ entre_erp.patches.v0_1.dominios_limpeza
 entre_erp.patches.v0_1.dominios_notificacoes
 entre_erp.patches.v0_1.dominios_itens_factura
 entre_erp.patches.v0_1.dominios_campos_factura
+entre_erp.patches.v0_1.folha_salarios

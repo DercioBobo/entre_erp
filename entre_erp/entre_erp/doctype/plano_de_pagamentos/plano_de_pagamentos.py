@@ -4,6 +4,7 @@ from frappe.model.document import Document
 from frappe.utils import flt
 
 from entre_erp.caixa import apagar_reforcos_do_plano, sincronizar_reforcos
+from entre_erp.folha import aplicar_folha
 from entre_erp.pagamentos import (
 	ESTADO_PAGO,
 	ESTADO_PARCIAL,
@@ -101,6 +102,8 @@ class PlanodePagamentos(Document):
 				},
 			)
 			adicionadas += 1
+		if adicionadas:
+			aplicar_folha(self)
 		return adicionadas
 
 	def adicionar_linhas_proximo_mes(self):

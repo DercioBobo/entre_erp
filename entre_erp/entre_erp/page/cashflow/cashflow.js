@@ -84,6 +84,7 @@ const COLUNAS_RECORRENTES = [
 	{ campo: "categoria", label: "Categoria", tipo: "select", largura: 190, opcoes: (s) => s.categorias },
 	{ campo: "valor_padrao", label: "Valor Padrão", tipo: "num", largura: 130 },
 	{ campo: "tipo_valor", label: "Tipo", tipo: "select", largura: 100, opcoes: () => ["Fixo", "Variável"] },
+	{ campo: "fonte", label: "Fonte", tipo: "select", largura: 190, opcoes: () => ["Manual", "Folha: Salários líquidos"] },
 	{ campo: "prioridade", label: "Prior.", tipo: "select", largura: 70, opcoes: () => ["", "1", "2", "3", "4"] },
 	{ campo: "metodo_pagamento", label: "Método", tipo: "select", largura: 100, opcoes: (s) => [""].concat(s.metodos) },
 	{ campo: "referencia", label: "Referência / NIB", tipo: "text", largura: 320 },

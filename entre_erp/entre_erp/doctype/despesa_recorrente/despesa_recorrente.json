@@ -11,6 +11,7 @@
   "column_break_1",
   "valor_padrao",
   "tipo_valor",
+  "fonte",
   "prioridade",
   "metodo_pagamento",
   "section_break_ref",
@@ -69,6 +70,14 @@
    "description": "Variável: o valor muda todos os meses (ex.: IVA, AWS) e deve ser confirmado no plano."
   },
   {
+   "fieldname": "fonte",
+   "fieldtype": "Select",
+   "label": "Fonte do Valor",
+   "options": "Manual\nFolha: Salários líquidos",
+   "default": "Manual",
+   "description": "Folha: o valor de cada mês vem dos recibos de vencimento submetidos (enquanto a linha não estiver paga)."
+  },
+  {
    "fieldname": "prioridade",
    "fieldtype": "Select",
    "label": "Prioridade",
@@ -101,7 +110,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-19 00:00:00.000000",
+ "modified": "2026-10-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
  "name": "Despesa Recorrente",
