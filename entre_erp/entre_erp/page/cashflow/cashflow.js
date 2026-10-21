@@ -607,12 +607,16 @@ class CashflowSheet {
 			this.$conteudo.find(".cf-salto-caixa").html(this.html_chip_caixa());
 		}
 		const pct = p.total_previsto ? Math.min(100, Math.round((p.total_pago / p.total_previsto) * 100)) : 0;
-		// Invoiced in the month comes with the plan load only (edits don't change it).
+		// Invoiced / received in the month come with the plan load only (edits don't change them).
 		const facturado = this.doc ? this.doc.facturado : null;
+		const recebido = this.doc ? this.doc.recebido : null;
 		const tem_facturado = facturado !== null && facturado !== undefined;
+		const tem_recebido = recebido !== null && recebido !== undefined;
+		const extras = tem_facturado + tem_recebido;
 		this.$conteudo.find(".cf-cabecalho").html(`
-			<div class="cf-kpis ${tem_facturado ? "cf-kpis-5" : ""}">
+			<div class="cf-kpis ${extras ? `cf-kpis-${4 + extras}` : ""}">
 				${tem_facturado ? `<div class="cf-kpi"><div class="cf-kpi-label">${__("Facturado no mês")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(facturado)}</div></div>` : ""}
+				${tem_recebido ? `<div class="cf-kpi" title="${__("Recebimentos de clientes (Payment Entry) e vendas POS pagas neste mês")}"><div class="cf-kpi-label">${__("Recebido no mês")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(recebido)}</div></div>` : ""}
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Total Previsto")}</div><div class="cf-kpi-valor">${dinheiro(p.total_previsto)}</div></div>
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Total Pago")}</div><div class="cf-kpi-valor cf-verde">${dinheiro(p.total_pago)}</div></div>
 				<div class="cf-kpi"><div class="cf-kpi-label">${__("Remanescente")}</div><div class="cf-kpi-valor ${p.total_remanescente > 0 ? "cf-laranja" : ""}">${dinheiro(p.total_remanescente)}</div></div>
@@ -2803,6 +2807,7 @@ function inject_styles() {
 		.cf-caixa-mes { font-size: 15px; font-weight: 600; min-width: 130px; text-align: center; }
 		.cf-caixa-topo .cf-ajuda { margin: 0; font-size: 12px; }
 		.cf-kpis.cf-kpis-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+		.cf-kpis.cf-kpis-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 		.cf-vermelho { color: var(--cf-vermelho) !important; }
 		.cf-reforco > td:first-child { box-shadow: inset 3px 0 0 var(--cf-verde) !important; }
 		.cf-reforco [data-campo="tipo"], .cf-reforco [data-campo="valor"] { color: var(--cf-verde); font-weight: 600; }
@@ -2903,7 +2908,7 @@ function inject_styles() {
 		.cf-ponto-pendente { background: var(--cf-laranja); }
 
 		@media (max-width: 768px) {
-			.cf-kpis, .cf-kpis.cf-kpis-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+			.cf-kpis, .cf-kpis.cf-kpis-5, .cf-kpis.cf-kpis-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 			.cf-kpi-valor { font-size: 16px; }
 			.cf-grelha-wrap { max-height: none; }
 		}

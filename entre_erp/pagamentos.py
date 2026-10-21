@@ -241,7 +241,18 @@ def obter_plano(plano):
 	resultado["caixa"] = resumo_caixa_do_plano(doc)
 	if doc.tipo == "Mensal":
 		resultado["facturado"] = facturado_no_mes(doc.ano, doc.mes)
+		resultado["recebido"] = recebido_no_mes(doc.ano, doc.mes)
 	return resultado
+
+
+def _empresa_do_cashflow():
+	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import definicao
+
+	return (
+		definicao("empresa_padrao")
+		or frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+	)
 
 
 def facturado_no_mes(ano, mes):
@@ -251,13 +262,7 @@ def facturado_no_mes(ano, mes):
 	None when the user can't read Sales Invoices."""
 	if not frappe.has_permission("Sales Invoice", "read"):
 		return None
-	from entre_erp.entre_erp.doctype.cashflow_settings.cashflow_settings import definicao
-
-	company = (
-		definicao("empresa_padrao")
-		or frappe.defaults.get_user_default("Company")
-		or frappe.db.get_single_value("Global Defaults", "default_company")
-	)
+	company = _empresa_do_cashflow()
 	return flt(
 		frappe.db.sql(
 			"""
@@ -268,6 +273,35 @@ def facturado_no_mes(ano, mes):
 			(company, cint(ano), numero_mes(mes)),
 		)[0][0]
 	)
+
+
+def recebido_no_mes(ano, mes):
+	"""What customers paid in the month: customer receipts (Payment Entry)
+	plus POS invoices paid on the spot, in the company currency — the same
+	figure as the Painel Financeiro's Entradas reais. None when the user
+	can't read Payment Entries."""
+	if not frappe.has_permission("Payment Entry", "read"):
+		return None
+	valores = {"company": _empresa_do_cashflow(), "ano": cint(ano), "mes": numero_mes(mes)}
+	recebimentos = frappe.db.sql(
+		"""
+		select sum(base_received_amount)
+		from `tabPayment Entry`
+		where docstatus = 1 and payment_type = 'Receive' and party_type = 'Customer'
+			and company = %(company)s and year(posting_date) = %(ano)s and month(posting_date) = %(mes)s
+		""",
+		valores,
+	)[0][0]
+	pos = frappe.db.sql(
+		"""
+		select sum(base_paid_amount)
+		from `tabSales Invoice`
+		where docstatus = 1 and is_pos = 1
+			and company = %(company)s and year(posting_date) = %(ano)s and month(posting_date) = %(mes)s
+		""",
+		valores,
+	)[0][0]
+	return flt(recebimentos) + flt(pos)
 
 
 @frappe.whitelist()
