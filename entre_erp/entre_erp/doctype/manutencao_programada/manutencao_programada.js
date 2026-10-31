@@ -151,7 +151,6 @@ function ligar_pickers(frm) {
 		modo: "hora",
 		campos: { hora: "hora_do_lembrete" },
 		rotulo: __("Hora do lembrete"),
-		periodos: ["Manhã", "Tarde"],
 		padrao: { ini: 8 * 60 },
 		readonly: ["Concluída", "Cancelada"].includes(frm.doc.estado),
 	});

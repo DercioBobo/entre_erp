@@ -28,7 +28,6 @@ frappe.ui.form.on("Modelo de Manutencao", {
 			modo: "hora",
 			campos: { hora: "hora_do_lembrete" },
 			rotulo: __("Hora do lembrete"),
-			periodos: ["Manhã", "Tarde"],
 			padrao: { ini: 8 * 60 },
 		});
 		if (frm.is_new()) return;

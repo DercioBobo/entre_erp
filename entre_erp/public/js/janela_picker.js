@@ -1,6 +1,7 @@
-// A friendlier picker for maintenance windows: tap a day, the start hour and
-// the end hour (or a duration) instead of typing datetimes. It reads and
-// writes the same Datetime/Time fields, so the server sees no difference.
+// A friendlier picker for maintenance windows: tap a day, then type or nudge
+// the start and end (21 / 2130 / 21h30, − and + by 15 min), drag the window on
+// a 24h bar, or take a common one in one tap. It reads and writes the same
+// Datetime/Time fields, so the server sees no difference.
 //
 //   entre_erp.janela.ligar(frm, "janela", { modo: "janela", campos: { inicio: "inicio", fim: "fim" } })
 //   entre_erp.janela.criar(wrapper, { modo: "momento", valor: { momento }, on_change })
@@ -16,24 +17,23 @@ frappe.provide("entre_erp.janela");
 	const SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 	const SEMANA_LONGA = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 	const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-	const PERIODOS = [
-		["Manhã", [6, 7, 8, 9, 10, 11]],
-		["Tarde", [12, 13, 14, 15, 16, 17]],
-		["Noite", [18, 19, 20, 21, 22, 23]],
-		["Madrugada", [0, 1, 2, 3, 4, 5]],
-	];
-	const MINUTOS = [0, 15, 30, 45];
-	const DURACOES = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12];
 	const DIA = 1440;
+	const PASSO = 15;
 	// Most maintenance runs 21h00 → 04h00.
 	const PADRAO = { ini: 21 * 60, fim: 4 * 60 };
+	// One-tap windows (after the default / the modelo's own) and reminder hours.
+	const JANELAS = [[21 * 60, 4 * 60], [22 * 60, 2 * 60], [23 * 60, 5 * 60], [20 * 60, 23 * 60]];
+	const HORAS = [7, 8, 9, 10, 12, 14].map((h) => h * 60);
 
 	const COM_DIA = ["janela", "momento"];
 	const COM_FIM = ["janela", "horas"];
 
 	const dois = (n) => String(n).padStart(2, "0");
 	const hhmm = (min) => `${dois(Math.floor(min / 60))}h${dois(min % 60)}`;
-	const hora_str = (min) => `${dois(Math.floor(min / 60))}:${dois(min % 60)}:00`;
+	const curta = (min) => (min % 60 ? hhmm(min) : `${dois(min / 60)}h`);
+	const hora_input = (min) => `${dois(Math.floor(min / 60))}:${dois(min % 60)}`;
+	const hora_str = (min) => `${hora_input(min)}:00`;
+	const limitar = (v, min, max) => Math.min(Math.max(v, min), max);
 	// "21:00:00", "2026-10-19 21:00:00" or "2026-10-19 21:00:00.000000" → 1260
 	const minutos = (texto) => {
 		if (!texto) return null;
@@ -41,7 +41,15 @@ frappe.provide("entre_erp.janela");
 		const [h, m] = (s.includes(" ") ? s.split(" ")[1] : s).split(":").map(Number);
 		return h * 60 + (m || 0);
 	};
+	// What people type: "21", "9", "2130", "21:30", "21h30", "21h" → minutes, or null
+	const ler_hora = (texto) => {
+		const m = String(texto).trim().toLowerCase().replace(/\s/g, "").match(/^(\d{1,2})(?:[:h.]?(\d{2}))?h?$/);
+		if (!m) return null;
+		const [h, mi] = [Number(m[1]), Number(m[2] || 0)];
+		return h > 24 || mi > 59 ? null : (h % 24) * 60 + mi;
+	};
 	const duracao = (ini, fim) => (fim - ini + DIA) % DIA || DIA;
+	const texto_duracao = (min) => `${Math.floor(min / 60)}h${min % 60 ? dois(min % 60) : ""}`;
 	const dia_de = (texto) => (texto ? String(texto).slice(0, 10) : null);
 	const somar_dias = (dia, n) => moment(dia).add(n, "days").format("YYYY-MM-DD");
 	const hoje = () => frappe.datetime.get_today();
@@ -49,10 +57,11 @@ frappe.provide("entre_erp.janela");
 	function rotulo_dia(dia) {
 		const diff = moment(dia).diff(moment(hoje()), "days");
 		const d = moment(dia);
-		if (diff === 0) return ["Hoje", `${d.date()} ${MESES[d.month()]}`];
-		if (diff === 1) return ["Amanhã", `${d.date()} ${MESES[d.month()]}`];
-		if (diff === -1) return ["Ontem", `${d.date()} ${MESES[d.month()]}`];
-		return [SEMANA[d.day()], `${d.date()} ${MESES[d.month()]}`];
+		const data = `${d.date()} ${MESES[d.month()]}`;
+		if (diff === 0) return ["Hoje", data];
+		if (diff === 1) return ["Amanhã", data];
+		if (diff === -1) return ["Ontem", data];
+		return [SEMANA[d.day()], data];
 	}
 
 	function extenso(dia) {
@@ -63,53 +72,86 @@ frappe.provide("entre_erp.janela");
 
 	function estilos() {
 		if (document.getElementById("entre-janela-css")) return;
+		const subtil = (pct) => `color-mix(in srgb, var(--text-color) ${pct}%, transparent)`;
 		const css = `
-		.ej { display: flex; flex-direction: column; gap: 14px; }
+		.ej { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
 		.ej-linha { display: flex; flex-direction: column; gap: 6px; }
-		.ej-rotulo { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
-		.ej-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+		.ej-rotulo, .ej-tok-rot { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+		.ej-chips, .ej-sugestoes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 		.ej-chip { border: 1px solid var(--border-color); background: var(--control-bg); color: var(--text-color);
-			border-radius: 8px; padding: 4px 10px; font-size: 13px; cursor: pointer; line-height: 1.3; min-width: 44px; text-align: center; }
-		.ej-chip:hover { border-color: var(--primary); }
-		.ej-chip small { display: block; font-size: 11px; color: var(--text-muted); }
+			border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; line-height: 1.3; min-width: 44px; text-align: center; }
+		.ej-chip:hover { border-color: var(--text-muted); }
+		.ej-chip small { display: block; font-size: 10px; color: var(--text-muted); }
 		.ej-chip.activo { background: var(--primary); border-color: var(--primary); color: #fff; }
-		.ej-chip.activo small { color: rgba(255, 255, 255, .85); }
+		.ej-chip.activo small { color: rgba(255, 255, 255, .8); }
 		.ej-chip.fora { opacity: .55; }
-		.ej-grelha { display: grid; grid-template-columns: 82px repeat(6, minmax(40px, 1fr)); gap: 4px; align-items: center; max-width: 460px; }
-		.ej-grelha .ej-periodo { font-size: 12px; color: var(--text-muted); }
-		.ej-grelha .ej-chip { padding: 5px 0; min-width: 0; }
-		.ej-outro { max-width: 150px; height: 30px; font-size: 13px; }
-		.ej-resumo { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; background: var(--fg-color); }
-		.ej-texto { font-size: 14px; font-weight: 600; }
-		.ej-texto .ej-dur { font-weight: 400; color: var(--text-muted); }
-		.ej-barra { position: relative; height: 10px; border-radius: 5px; background: var(--control-bg); margin: 10px 0 4px; }
-		.ej-faixa { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--primary); }
-		.ej-marca { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--border-color); }
-		.ej-marca.meia-noite { background: var(--text-muted); }
-		.ej-escala { position: relative; height: 14px; font-size: 10px; color: var(--text-muted); }
-		.ej-escala span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-		.ej-nota { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+		.ej-outro { max-width: 150px; height: 30px; font-size: 12px; }
+		.ej-caixa { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--border-color);
+			border-radius: 12px; background: var(--fg-color); }
+		.ej-toks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+		.ej-tok { display: flex; flex-direction: column; gap: 4px; }
+		.ej-tok-caixa { display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 10px;
+			background: var(--control-bg); overflow: hidden; }
+		.ej-tok-caixa:focus-within { border-color: var(--primary); }
+		.ej-tok-caixa button { border: 0; background: transparent; width: 30px; height: 40px; font-size: 16px; line-height: 1;
+			color: var(--text-muted); cursor: pointer; }
+		.ej-tok-caixa button:hover { color: var(--text-color); background: ${subtil(6)}; }
+		.ej-input { width: 62px; border: 0; padding: 0; background: transparent; text-align: center; outline: none;
+			font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-color); }
+		.ej-seta { padding-bottom: 10px; font-size: 18px; color: var(--text-muted); }
+		.ej-dur { padding-bottom: 11px; font-size: 13px; color: var(--text-muted); }
+		.ej-dur b { color: var(--text-color); }
+		.ej-trilho { position: relative; height: 40px; border-radius: 8px; background: var(--control-bg); overflow: hidden;
+			cursor: crosshair; touch-action: none; user-select: none; }
+		.ej-trilho.parado { cursor: default; height: 26px; }
+		.ej-hora { position: absolute; top: 0; bottom: 0; border-left: 1px solid ${subtil(5)}; }
+		.ej-hora.tres { border-left-color: ${subtil(12)}; }
+		.ej-hora.noite { background: ${subtil(5)}; }
+		.ej-meia-noite { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-muted); opacity: .45; }
+		.ej-camada { position: absolute; inset: 0; }
+		.ej-faixa { position: absolute; top: 5px; bottom: 5px; border-radius: 6px; background: var(--primary); color: #fff;
+			display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; white-space: nowrap;
+			overflow: hidden; cursor: grab; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
+		.ej-trilho.parado .ej-faixa { top: 4px; bottom: 4px; cursor: default; }
+		.ej-faixa:active { cursor: grabbing; }
+		.ej-pega { position: absolute; top: 0; bottom: 0; width: 12px; display: flex; align-items: center; justify-content: center; cursor: ew-resize; }
+		.ej-pega::after { content: ""; width: 3px; height: 14px; border-radius: 2px; background: rgba(255, 255, 255, .75); }
+		.ej-pega.ini { left: 0; }
+		.ej-pega.fim { right: 0; }
+		.ej-ponto { position: absolute; top: 4px; bottom: 4px; width: 6px; margin-left: -3px; border-radius: 3px; background: var(--primary); cursor: ew-resize; }
+		.ej-escala { position: relative; height: 14px; margin-top: -6px; font-size: 10px; color: var(--text-muted); }
+		.ej-escala span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
+		.ej-dica { font-size: 11px; color: var(--text-muted); }
+		.ej-resumo { font-size: 13px; font-weight: 600; color: var(--text-color); }
+		.ej-resumo .ej-mudo { font-weight: 400; color: var(--text-muted); }
+		.ej-nota { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-top: 2px; }
 		.ej-nota.alerta { color: var(--red-600, #c0392b); }
 		`;
 		document.head.insertAdjacentHTML("beforeend", `<style id="entre-janela-css">${css}</style>`);
 	}
 
 	class Janela {
-		constructor(wrapper, { modo = "janela", valor = {}, padrao = {}, readonly = false, dias = [0, 10], periodos, rotulo, on_change }) {
+		constructor(wrapper, { modo = "janela", valor = {}, padrao = {}, readonly = false, dias = [0, 10], rotulo, on_change }) {
 			estilos();
 			this.$w = $(wrapper);
 			this.modo = modo;
-			// e.g. ["Manhã", "Tarde"] for a reminder hour
-			this.periodos = periodos ? PERIODOS.filter(([p]) => periodos.includes(p)) : PERIODOS;
 			this.rotulo = rotulo;
 			this.readonly = readonly;
 			this.dias = dias;
 			this.on_change = on_change;
 			this.padrao = { ...PADRAO, ...padrao };
 			this.definir(valor, false);
-			this.$w.off("click.ej change.ej");
+			this.$w.off(".ej");
 			this.$w.on("click.ej", "[data-accao]", (e) => this.clicar(e.currentTarget.dataset));
 			this.$w.on("change.ej", ".ej-outro", (e) => e.target.value && this.mudar({ dia: e.target.value }));
+			this.$w.on("change.ej", ".ej-input", (e) => this.escrever(e.target.dataset.campo, e.target.value));
+			this.$w.on("keydown.ej", ".ej-input", (e) => {
+				if (e.key !== "Enter") return;
+				e.preventDefault();
+				e.stopPropagation();
+				e.target.blur();
+			});
+			this.$w.on("pointerdown.ej", ".ej-trilho", (e) => this.agarrar(e));
 		}
 
 		definir(valor = {}, emitir = true) {
@@ -127,12 +169,25 @@ frappe.provide("entre_erp.janela");
 			} else {
 				this.ini = minutos(v.hora) ?? this.padrao.ini;
 			}
+			this.ajustar_origem();
 			this.render();
 			if (emitir) this.emitir();
 		}
 
+		tem_fim() {
+			return COM_FIM.includes(this.modo);
+		}
+
 		completo() {
 			return !COM_DIA.includes(this.modo) || !!this.dia;
+		}
+
+		dur() {
+			return this.tem_fim() ? duracao(this.ini, this.fim) : 0;
+		}
+
+		chave() {
+			return this.tem_fim() ? `${this.ini}-${this.fim}` : `${this.ini}`;
 		}
 
 		valor() {
@@ -151,41 +206,137 @@ frappe.provide("entre_erp.janela");
 			if (v && this.on_change) this.on_change(v);
 		}
 
+		// Full redraw, for anything but dragging.
 		mudar(alteracoes) {
 			Object.assign(this, alteracoes);
+			this.ajustar_origem();
 			this.render();
 			this.emitir();
 		}
 
 		clicar({ accao, valor }) {
 			if (this.readonly) return;
-			const n = Number(valor);
-			const dur = COM_FIM.includes(this.modo) ? duracao(this.ini, this.fim) : 0;
+			const passo = accao?.endsWith("-mais") ? PASSO : -PASSO;
 			if (accao === "dia") return this.mudar({ dia: valor });
 			// A new start keeps the duration: the end moves with it.
-			if (accao === "ini-h") return this.mudar({ ini: n * 60 + (this.ini % 60), fim: (n * 60 + (this.ini % 60) + dur) % DIA });
-			if (accao === "ini-m") {
-				const ini = this.ini - (this.ini % 60) + n;
-				return this.mudar({ ini, fim: (ini + dur) % DIA });
+			if (accao === "ini-mais" || accao === "ini-menos") {
+				return this.mudar({ ini: (this.ini + passo + DIA) % DIA, fim: this.tem_fim() ? (this.fim + passo + DIA) % DIA : this.fim });
 			}
-			if (accao === "fim-h") return this.mudar({ fim: n * 60 + (this.fim % 60) });
-			if (accao === "fim-m") return this.mudar({ fim: this.fim - (this.fim % 60) + n });
-			if (accao === "dur") return this.mudar({ fim: (this.ini + n * 60) % DIA });
+			if (accao === "fim-mais" || accao === "fim-menos") {
+				const fim = (this.fim + passo + DIA) % DIA;
+				return fim === this.ini ? null : this.mudar({ fim });
+			}
+			if (accao === "pre") {
+				const [ini, fim] = valor.split("-").map(Number);
+				return this.mudar(this.tem_fim() ? { ini, fim } : { ini });
+			}
+			if (accao === "agora") return this.mudar({ dia: hoje(), ini: minutos(frappe.datetime.now_datetime()) });
+		}
+
+		escrever(campo, texto) {
+			const v = ler_hora(texto);
+			if (v === null || (campo === "fim" && v === this.ini)) return this.render(); // put the old value back
+			if (campo === "fim") return this.mudar({ fim: v });
+			return this.mudar({ ini: v, fim: this.tem_fim() ? (v + this.dur()) % DIA : this.fim });
+		}
+
+		// The 24h bar starts at `origem`: noon for evening windows (so 21h → 04h
+		// sits in the middle), a little before the start otherwise; 00h for a
+		// single time. Fixed while dragging so the bar does not move under you.
+		ajustar_origem() {
+			if (!this.tem_fim()) {
+				this.origem = 0;
+				return;
+			}
+			let origem = this.ini >= 720 ? 720 : Math.max(0, Math.floor(this.ini / 180) * 180 - 180);
+			if (this.ini - origem + this.dur() > DIA) origem = this.ini - (this.ini % 60);
+			this.origem = origem;
+		}
+
+		rel(min) {
+			return (((min - this.origem) % DIA) + DIA) % DIA;
+		}
+
+		// Dragging on the bar: the window's body moves it, its ends resize it,
+		// empty space draws a new one (a plain click moves the start there).
+		agarrar(e) {
+			const ev = e.originalEvent || e;
+			if (this.readonly || ev.button > 0) return;
+			const trilho = e.currentTarget;
+			const caixa = trilho.getBoundingClientRect();
+			const posicao = (x) => Math.round((limitar((x - caixa.left) / caixa.width, 0, 1) * DIA) / PASSO) * PASSO;
+			const alvo = ev.target.closest("[data-arrasto]")?.dataset.arrasto || "novo";
+			const inicio = { p: posicao(ev.clientX), r: this.rel(this.ini), dur: this.dur() };
+			let moveu = false;
+			const mover = (m) => {
+				const p = posicao(m.clientX);
+				if (!moveu && Math.abs(p - inicio.p) < PASSO) return;
+				moveu = true;
+				this.arrastar(alvo, p, inicio);
+			};
+			const largar = () => {
+				trilho.removeEventListener("pointermove", mover);
+				trilho.removeEventListener("pointerup", largar);
+				trilho.removeEventListener("pointercancel", largar);
+				if (!moveu && (alvo === "novo" || alvo === "ponto")) this.arrastar("clique", inicio.p, inicio);
+				this.emitir();
+			};
+			trilho.setPointerCapture?.(ev.pointerId);
+			trilho.addEventListener("pointermove", mover);
+			trilho.addEventListener("pointerup", largar);
+			trilho.addEventListener("pointercancel", largar);
+			ev.preventDefault();
+		}
+
+		// p and inicio.p: positions on the bar in minutes from its left edge.
+		arrastar(alvo, p, inicio) {
+			const abs = (x) => (this.origem + x) % DIA;
+			if (!this.tem_fim()) {
+				this.ini = abs(Math.min(p, DIA - PASSO));
+				return this.actualizar();
+			}
+			// With a day, the start stays before midnight: after it is another day.
+			const ultimo = COM_DIA.includes(this.modo) ? DIA - this.origem - PASSO : DIA - PASSO;
+			const { r, dur } = inicio;
+			if (alvo === "mover" || alvo === "clique") {
+				const x = limitar(alvo === "mover" ? r + p - inicio.p : p, 0, Math.min(DIA - dur, ultimo));
+				this.ini = abs(x);
+				this.fim = abs(x + dur);
+			} else if (alvo === "ini") {
+				this.ini = abs(limitar(p, 0, Math.min(r + dur - PASSO, ultimo)));
+			} else if (alvo === "fim") {
+				this.fim = abs(limitar(p, r + PASSO, DIA));
+			} else {
+				const a = Math.min(inicio.p, p, ultimo);
+				this.ini = abs(a);
+				this.fim = abs(Math.max(inicio.p, p, a + PASSO));
+			}
+			this.actualizar();
+		}
+
+		// Light redraw while dragging: the window, the inputs and the summary.
+		actualizar() {
+			this.$w.find(".ej-camada").html(this.html_faixa());
+			this.$w.find(".ej-dur").html(this.html_dur());
+			this.$w.find(".ej-resumo").html(this.html_resumo());
+			this.$w.find(".ej-input").each((_, el) => {
+				if (el !== document.activeElement) el.value = hora_input(el.dataset.campo === "fim" ? this.fim : this.ini);
+			});
+			this.$w.find('[data-accao="pre"]').each((_, el) => el.classList.toggle("activo", el.dataset.valor === this.chave()));
 		}
 
 		// Day chips
 
 		html_dias() {
 			const [desde, quantos] = this.dias;
-			const base = hoje();
-			const dias = Array.from({ length: quantos }, (_, i) => somar_dias(base, desde + i));
+			const dias = Array.from({ length: quantos }, (_, i) => somar_dias(hoje(), desde + i));
 			if (this.dia && !dias.includes(this.dia)) dias.push(this.dia);
 			const chips = dias
 				.map((dia) => {
 					const [cima, baixo] = rotulo_dia(dia);
 					const fds = [0, 6].includes(moment(dia).day()) ? " fora" : "";
 					const activo = dia === this.dia ? " activo" : "";
-					return `<button type="button" class="ej-chip${activo}${fds}" data-accao="dia" data-valor="${dia}">${cima}<small>${baixo}</small></button>`;
+					return `<button type="button" class="ej-chip${activo}${fds}" data-accao="dia" data-valor="${dia}">${__(cima)}<small>${baixo}</small></button>`;
 				})
 				.join("");
 			return `<div class="ej-linha"><div class="ej-rotulo">${__("Dia")}</div>
@@ -194,106 +345,124 @@ frappe.provide("entre_erp.janela");
 				</div></div>`;
 		}
 
-		// Hour grid (by part of the day) + minutes
+		// Start (→ end) inputs with − / +
 
-		html_horas(rotulo, prefixo, actual) {
-			const linhas = this.periodos.map(([periodo, horas]) => {
-				const chips = horas
-					.map((h) => {
-						const activo = Math.floor(actual / 60) === h ? " activo" : "";
-						return `<button type="button" class="ej-chip${activo}" data-accao="${prefixo}-h" data-valor="${h}">${dois(h)}h</button>`;
-					})
-					.join("");
-				return `<span class="ej-periodo">${__(periodo)}</span>${chips}`;
-			}).join("");
-			const mins = MINUTOS.map((m) => {
-				const activo = actual % 60 === m ? " activo" : "";
-				return `<button type="button" class="ej-chip${activo}" data-accao="${prefixo}-m" data-valor="${m}">:${dois(m)}</button>`;
-			}).join("");
-			return `<div class="ej-linha"><div class="ej-rotulo">${rotulo}</div>
-				<div class="ej-grelha">${linhas}</div>
-				<div class="ej-chips"><span class="ej-periodo text-muted small" style="width: 78px">${__("Minutos")}</span>${mins}</div></div>`;
+		html_tokens() {
+			const token = (campo, rotulo, valor) => `
+				<div class="ej-tok"><span class="ej-tok-rot">${rotulo}</span>
+					<div class="ej-tok-caixa">
+						<button type="button" data-accao="${campo}-menos" title="${__("−15 min")}">−</button>
+						<input class="ej-input" data-campo="${campo}" value="${hora_input(valor)}" inputmode="numeric" maxlength="5" aria-label="${rotulo}">
+						<button type="button" data-accao="${campo}-mais" title="${__("+15 min")}">+</button>
+					</div></div>`;
+			let html = token("ini", this.rotulo || (this.tem_fim() ? __("Início") : __("Hora")), this.ini);
+			if (this.tem_fim()) html += `<span class="ej-seta">→</span>${token("fim", __("Fim"), this.fim)}<span class="ej-dur">${this.html_dur()}</span>`;
+			return `<div class="ej-toks">${html}</div>`;
 		}
 
-		html_duracoes() {
-			const actual = duracao(this.ini, this.fim);
-			const chips = DURACOES.map((h) => {
-				const activo = actual === h * 60 ? " activo" : "";
-				return `<button type="button" class="ej-chip${activo}" data-accao="dur" data-valor="${h}">${h}h</button>`;
-			}).join("");
-			return `<div class="ej-linha"><div class="ej-rotulo">${__("Duração")}</div><div class="ej-chips">${chips}</div></div>`;
+		html_dur() {
+			if (!this.tem_fim()) return "";
+			let html = `<b>${texto_duracao(this.dur())}</b>`;
+			if (this.fim <= this.ini) {
+				html += this.modo === "janela" && this.dia
+					? ` · ${__("termina {0}", [SEMANA_LONGA[moment(this.dia).add(1, "days").day()]])}`
+					: ` · ${__("termina no dia seguinte")}`;
+			}
+			return html;
 		}
 
-		// Summary + a 24h bar starting 3h before the start
+		// The 24h bar
+
+		html_trilho() {
+			const horas = Array.from({ length: 24 }, (_, i) => {
+				const h = (this.origem / 60 + i) % 24;
+				const classes = `${h >= 18 || h < 6 ? " noite" : ""}${i % 3 === 0 ? " tres" : ""}`;
+				return `<div class="ej-hora${classes}" style="left: ${(i / 24) * 100}%; width: ${100 / 24}%"></div>`;
+			}).join("");
+			const meia_noite = this.origem ? `<div class="ej-meia-noite" style="left: ${((DIA - this.origem) / DIA) * 100}%"></div>` : "";
+			const escala = [];
+			for (let i = 0; i <= 24; i += 3) {
+				const h = (this.origem / 60 + i) % 24;
+				const rotulo = h === 0 && i > 0 && i < 24 && this.modo === "janela" && this.dia
+					? `00h ${SEMANA[moment(this.dia).add(1, "days").day()]}`
+					: `${dois(h)}h`;
+				escala.push(`<span style="left: ${limitar((i / 24) * 100, 3, 97)}%">${rotulo}</span>`);
+			}
+			const dica = this.readonly
+				? ""
+				: `<div class="ej-dica">${
+						this.tem_fim()
+							? __("Arraste na barra para marcar a janela, ou puxe as pontas para ajustar.")
+							: __("Toque na barra para escolher a hora.")
+				  }</div>`;
+			return `<div>
+				<div class="ej-trilho${this.readonly ? " parado" : ""}">${horas}${meia_noite}<div class="ej-camada">${this.html_faixa()}</div></div>
+				<div class="ej-escala">${escala.join("")}</div></div>${dica}`;
+		}
+
+		html_faixa() {
+			if (!this.tem_fim()) {
+				return `<div class="ej-ponto" data-arrasto="ponto" style="left: ${(this.rel(this.ini) / DIA) * 100}%"></div>`;
+			}
+			const largura = (this.dur() / DIA) * 100;
+			const texto = largura > 16 ? `${hhmm(this.ini)} – ${hhmm(this.fim)}` : "";
+			const pegas = this.readonly ? "" : `<span class="ej-pega ini" data-arrasto="ini"></span><span class="ej-pega fim" data-arrasto="fim"></span>`;
+			return `<div class="ej-faixa" data-arrasto="mover" style="left: ${(this.rel(this.ini) / DIA) * 100}%; width: ${largura}%">${pegas}<span>${texto}</span></div>`;
+		}
+
+		html_sugestoes() {
+			let itens;
+			if (this.tem_fim()) {
+				const janelas = [[this.padrao.ini, this.padrao.fim], ...JANELAS];
+				itens = janelas
+					.filter(([a, b], i) => janelas.findIndex(([c, d]) => a === c && b === d) === i)
+					.map(([a, b]) => [`${a}-${b}`, `${curta(a)} – ${curta(b)}`]);
+			} else if (this.modo === "hora") {
+				itens = [...new Set([this.padrao.ini, ...HORAS])].sort((a, b) => a - b).map((m) => [`${m}`, curta(m)]);
+			} else {
+				return `<div class="ej-sugestoes"><button type="button" class="ej-chip" data-accao="agora">${__("Agora")}</button></div>`;
+			}
+			const chips = itens
+				.map(([valor, rotulo]) => {
+					const activo = valor === this.chave() ? " activo" : "";
+					return `<button type="button" class="ej-chip${activo}" data-accao="pre" data-valor="${valor}">${rotulo}</button>`;
+				})
+				.join("");
+			return `<div class="ej-sugestoes"><span class="ej-dica">${__("Rápido:")}</span>${chips}</div>`;
+		}
 
 		html_resumo() {
-			if (!this.completo()) {
-				return `<div class="ej-resumo"><div class="ej-texto text-muted">${__("Escolha o dia")}</div></div>`;
-			}
-			const tem_fim = COM_FIM.includes(this.modo);
-			const dur = tem_fim ? duracao(this.ini, this.fim) : 0;
-			const dia_seguinte = tem_fim && this.fim <= this.ini;
-
-			let texto = "";
+			if (!this.completo()) return `<span class="ej-mudo">${__("Escolha o dia")}</span>`;
+			const dur = this.tem_fim() ? ` <span class="ej-mudo">· ${texto_duracao(this.dur())}</span>` : "";
+			let texto;
 			if (this.modo === "janela") {
-				const fim = dia_seguinte ? ` ${__("de")} ${SEMANA_LONGA[moment(this.dia).add(1, "days").day()]}` : "";
+				const fim = this.fim <= this.ini ? ` ${__("de")} ${SEMANA_LONGA[moment(this.dia).add(1, "days").day()]}` : "";
 				texto = `${extenso(this.dia)} · ${hhmm(this.ini)} → ${hhmm(this.fim)}${fim}`;
 			} else if (this.modo === "horas") {
-				texto = `${hhmm(this.ini)} → ${hhmm(this.fim)}${dia_seguinte ? ` (${__("dia seguinte")})` : ""}`;
+				texto = `${hhmm(this.ini)} → ${hhmm(this.fim)}${this.fim <= this.ini ? ` ${__("do dia seguinte")}` : ""}`;
 			} else if (this.modo === "momento") {
 				texto = `${extenso(this.dia)} · ${hhmm(this.ini)}`;
 			} else {
 				texto = hhmm(this.ini);
 			}
-			if (dur) texto += ` <span class="ej-dur">· ${Math.floor(dur / 60)}h${dois(dur % 60)}</span>`;
-
 			const notas = [];
-			const valor = this.valor();
-			const agora = frappe.datetime.now_datetime();
-			const inicio = valor.inicio || valor.momento;
-			if (!this.readonly && this.modo === "janela" && inicio < agora) {
-				notas.push(`<div class="ej-nota alerta">${__("Este início já passou.")}</div>`);
+			if (this.modo === "janela") {
+				if (!this.readonly && this.valor().inicio < frappe.datetime.now_datetime()) {
+					notas.push(`<div class="ej-nota alerta">${__("Este início já passou.")}</div>`);
+				}
+				if ([0, 6].includes(moment(this.dia).day())) notas.push(`<div class="ej-nota">${__("Fim de semana.")}</div>`);
 			}
-			if (this.modo === "janela" && [0, 6].includes(moment(this.dia).day())) {
-				notas.push(`<div class="ej-nota">${__("Fim de semana.")}</div>`);
-			}
-
-			return `<div class="ej-resumo"><div class="ej-texto">${texto}</div>${this.html_barra(dur)}${notas.join("")}</div>`;
-		}
-
-		html_barra(dur) {
-			const origem = (Math.floor(this.ini / 60) - 3 + 24) % 24; // hour at the bar's left edge
-			const pos = (min) => ((((min - origem * 60) % DIA) + DIA) % DIA) / DIA * 100;
-			const marcas = [];
-			const escala = [];
-			for (let i = 0; i <= 24; i += 3) {
-				const h = (origem + i) % 24;
-				const esquerda = (i / 24) * 100;
-				const meia_noite = h === 0 && i > 0 && i < 24;
-				marcas.push(`<div class="ej-marca${meia_noite ? " meia-noite" : ""}" style="left: ${esquerda}%"></div>`);
-				const rotulo = meia_noite && this.dia
-					? `00h ${SEMANA[moment(this.dia).add(1, "days").day()]}`
-					: `${dois(h)}h`;
-				escala.push(`<span style="left: ${Math.min(Math.max(esquerda, 3), 97)}%">${rotulo}</span>`);
-			}
-			const largura = dur ? (dur / DIA) * 100 : 0.8;
-			const faixa = `<div class="ej-faixa" style="left: ${pos(this.ini)}%; width: ${largura}%"></div>`;
-			return `<div class="ej-barra">${marcas.join("")}${faixa}</div><div class="ej-escala">${escala.join("")}</div>`;
+			return `${texto}${dur}${notas.join("")}`;
 		}
 
 		render() {
-			const partes = [];
-			if (!this.readonly) {
-				if (COM_DIA.includes(this.modo)) partes.push(this.html_dias());
-				const rotulo_ini = this.rotulo || (COM_FIM.includes(this.modo) ? __("Início") : __("Hora"));
-				partes.push(this.html_horas(rotulo_ini, "ini", this.ini));
-				if (COM_FIM.includes(this.modo)) {
-					partes.push(this.html_duracoes());
-					partes.push(this.html_horas(__("Fim"), "fim", this.fim));
-				}
-			}
-			partes.push(this.html_resumo());
-			this.$w.html(`<div class="ej">${partes.join("")}</div>`);
+			const caixa = [];
+			if (!this.readonly) caixa.push(this.html_tokens());
+			if (this.modo !== "hora") caixa.push(this.html_trilho());
+			if (!this.readonly) caixa.push(this.html_sugestoes());
+			if (this.modo !== "hora" || this.readonly) caixa.push(`<div class="ej-resumo">${this.html_resumo()}</div>`);
+			const dias = !this.readonly && COM_DIA.includes(this.modo) ? this.html_dias() : "";
+			this.$w.html(`<div class="ej">${dias}<div class="ej-caixa">${caixa.join("")}</div></div>`);
 		}
 	}
 
