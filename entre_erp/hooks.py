@@ -11,8 +11,8 @@ required_apps = ["erpnext"]
 # ---------------------------------------------------------------------------
 # Assets
 # ---------------------------------------------------------------------------
-app_include_css = []
-app_include_js = []
+app_include_css = ["/assets/entre_erp/css/manutencao.css"]
+app_include_js = ["/assets/entre_erp/js/janela_picker.js", "/assets/entre_erp/js/manutencao_cartao.js"]
 web_include_css = []
 web_include_js = []
 
@@ -62,6 +62,15 @@ doc_events = {
 # ---------------------------------------------------------------------------
 scheduler_events = {
     "monthly": ["entre_erp.pagamentos.criar_plano_do_mes"],
-    "daily": ["entre_erp.dominios.tarefa_diaria"],
+    "daily": ["entre_erp.dominios.tarefa_diaria", "entre_erp.manutencao.criar_preventivas"],
     "weekly_long": ["entre_erp.whois.actualizar_todos"],
+    "cron": {"*/15 * * * *": ["entre_erp.manutencao.tarefa_frequente"]},
+}
+
+# For the Manutencao Programada Notifications (docs/manutencao_programada_emails.md).
+jinja = {
+    "methods": [
+        "entre_erp.manutencao.periodo_manutencao",
+        "entre_erp.manutencao.quando_manutencao",
+    ],
 }

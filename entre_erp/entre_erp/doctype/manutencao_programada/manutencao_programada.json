@@ -1,0 +1,420 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-31 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cabecalho",
+  "section_geral",
+  "naming_series",
+  "modelo",
+  "aplicacao",
+  "customer",
+  "tipo",
+  "column_break_geral",
+  "estado",
+  "deployment_plan",
+  "section_janela",
+  "janela",
+  "inicio",
+  "fim",
+  "duracao",
+  "section_impacto",
+  "impacto",
+  "column_break_impacto",
+  "enviar_lembrete",
+  "lembrete",
+  "hora_do_lembrete",
+  "section_canais",
+  "canais_afectados",
+  "column_break_canais",
+  "canais_operacionais",
+  "section_destinatarios",
+  "destinatarios",
+  "column_break_destinatarios",
+  "destinatarios_cc",
+  "section_execucao",
+  "inicio_real",
+  "column_break_execucao",
+  "fim_real",
+  "section_relatorio",
+  "relatorio",
+  "relatorio_enviado_em",
+  "section_envios",
+  "aviso_enviado_em",
+  "lembrete_enviado_em",
+  "conclusao_enviada_em",
+  "column_break_envios",
+  "adiamentos",
+  "inicio_anterior",
+  "fim_anterior",
+  "prolongamentos",
+  "fim_alertado"
+ ],
+ "fields": [
+  {
+   "fieldname": "cabecalho",
+   "fieldtype": "HTML",
+   "label": "Cabeçalho"
+  },
+  {
+   "fieldname": "section_geral",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "MP-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Série",
+   "options": "MP-.YYYY.-.####",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "description": "Preenche a aplicação, a janela e os destinatários.",
+   "fieldname": "modelo",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Modelo",
+   "options": "Modelo de Manutencao"
+  },
+  {
+   "fieldname": "aplicacao",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Aplicação",
+   "options": "Application",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Cliente",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "tipo",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tipo",
+   "options": "Correctiva\nPreventiva\nActualização",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_geral",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Rascunho",
+   "fieldname": "estado",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Estado",
+   "no_copy": 1,
+   "options": "Rascunho\nAgendada\nEm Curso\nConcluída\nCancelada",
+   "read_only": 1
+  },
+  {
+   "description": "Opcional. Com um Deployment Plan, o relatório do que foi feito fica disponível depois da manutenção.",
+   "fieldname": "deployment_plan",
+   "fieldtype": "Link",
+   "label": "Deployment Plan",
+   "options": "Deployment Plan"
+  },
+  {
+   "fieldname": "section_janela",
+   "fieldtype": "Section Break",
+   "label": "Janela"
+  },
+  {
+   "fieldname": "janela",
+   "fieldtype": "HTML",
+   "label": "Janela"
+  },
+  {
+   "fieldname": "inicio",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Início",
+   "reqd": 1
+  },
+  {
+   "fieldname": "fim",
+   "fieldtype": "Datetime",
+   "label": "Fim",
+   "reqd": 1
+  },
+  {
+   "fieldname": "duracao",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Duração",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_impacto",
+   "fieldtype": "Section Break",
+   "label": "Impacto e lembrete"
+  },
+  {
+   "default": "Total ou parcial",
+   "fieldname": "impacto",
+   "fieldtype": "Select",
+   "label": "Impacto",
+   "options": "Total\nTotal ou parcial\nParcial",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_impacto",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Não é enviado se o aviso saiu no próprio dia.",
+   "fieldname": "enviar_lembrete",
+   "fieldtype": "Check",
+   "label": "Enviar lembrete no dia"
+  },
+  {
+   "depends_on": "enviar_lembrete",
+   "fieldname": "lembrete",
+   "fieldtype": "HTML",
+   "label": "Hora do lembrete"
+  },
+  {
+   "default": "08:00:00",
+   "depends_on": "enviar_lembrete",
+   "fieldname": "hora_do_lembrete",
+   "fieldtype": "Time",
+   "label": "Hora do lembrete"
+  },
+  {
+   "collapsible": 1,
+   "description": "Deixe em branco quando a manutenção afecta todo o sistema (o caso habitual).",
+   "fieldname": "section_canais",
+   "fieldtype": "Section Break",
+   "label": "Canais"
+  },
+  {
+   "description": "Ex.: canal USSD (*511#)",
+   "fieldname": "canais_afectados",
+   "fieldtype": "Small Text",
+   "label": "Canais afectados"
+  },
+  {
+   "fieldname": "column_break_canais",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Ex.: canal WEB",
+   "fieldname": "canais_operacionais",
+   "fieldtype": "Small Text",
+   "label": "Canais que continuam operacionais"
+  },
+  {
+   "fieldname": "section_destinatarios",
+   "fieldtype": "Section Break",
+   "label": "Destinatários"
+  },
+  {
+   "fieldname": "destinatarios",
+   "fieldtype": "Table",
+   "label": "Para",
+   "options": "Destinatario de Manutencao"
+  },
+  {
+   "fieldname": "column_break_destinatarios",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "destinatarios_cc",
+   "fieldtype": "Table",
+   "label": "CC",
+   "options": "Destinatario de Manutencao"
+  },
+  {
+   "fieldname": "section_execucao",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Execução"
+  },
+  {
+   "fieldname": "inicio_real",
+   "fieldtype": "Datetime",
+   "label": "Início real",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_execucao",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "fim_real",
+   "fieldtype": "Datetime",
+   "label": "Fim real",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "deployment_plan",
+   "fieldname": "section_relatorio",
+   "fieldtype": "Section Break",
+   "label": "Relatório"
+  },
+  {
+   "description": "O que a manutenção trouxe, para o email de relatório. Pode ser preenchido a partir do Deployment Plan.",
+   "fieldname": "relatorio",
+   "fieldtype": "Text Editor",
+   "label": "Novidades e melhorias",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "relatorio_enviado_em",
+   "fieldtype": "Datetime",
+   "label": "Relatório enviado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_envios",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Envios"
+  },
+  {
+   "fieldname": "aviso_enviado_em",
+   "fieldtype": "Datetime",
+   "label": "Aviso enviado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "lembrete_enviado_em",
+   "fieldtype": "Datetime",
+   "label": "Lembrete enviado em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "conclusao_enviada_em",
+   "fieldtype": "Datetime",
+   "label": "Conclusão enviada em",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_envios",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "adiamentos",
+   "fieldtype": "Int",
+   "label": "Adiamentos",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "adiamentos",
+   "fieldname": "inicio_anterior",
+   "fieldtype": "Datetime",
+   "label": "Início antes do último adiamento",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.adiamentos || doc.prolongamentos",
+   "fieldname": "fim_anterior",
+   "fieldtype": "Datetime",
+   "label": "Fim antes da última alteração",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "prolongamentos",
+   "fieldtype": "Int",
+   "label": "Prolongamentos",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "fim_alertado",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Equipa alertada do fim da janela",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "is_calendar_and_gantt": 1,
+ "links": [],
+ "modified": "2026-10-31 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Manutencao Programada",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Tech Lead",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Tech",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "entretech suport",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "aplicacao, tipo, estado",
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "aplicacao",
+ "track_changes": 1
+}

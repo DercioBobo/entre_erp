@@ -1,0 +1,342 @@
+{
+ "actions": [],
+ "autoname": "field:titulo",
+ "creation": "2026-10-31 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cabecalho",
+  "section_geral",
+  "titulo",
+  "activo",
+  "aplicacao",
+  "customer",
+  "tipo",
+  "column_break_geral",
+  "impacto",
+  "enviar_lembrete",
+  "lembrete",
+  "hora_do_lembrete",
+  "section_janela",
+  "janela",
+  "hora_inicio",
+  "hora_fim",
+  "section_recorrencia",
+  "periodicidade",
+  "regra_mensal",
+  "comeca_em",
+  "dias_de_antecedencia",
+  "agendar_automaticamente",
+  "column_break_recorrencia",
+  "repete",
+  "proxima_data",
+  "ultima_gerada",
+  "ultima_manutencao",
+  "section_canais",
+  "canais_afectados",
+  "column_break_canais",
+  "canais_operacionais",
+  "section_destinatarios",
+  "destinatarios",
+  "column_break_destinatarios",
+  "destinatarios_cc"
+ ],
+ "fields": [
+  {
+   "fieldname": "cabecalho",
+   "fieldtype": "HTML",
+   "label": "Cabeçalho"
+  },
+  {
+   "fieldname": "section_geral",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "titulo",
+   "fieldtype": "Data",
+   "label": "Nome do modelo",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "activo",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Activo"
+  },
+  {
+   "fieldname": "aplicacao",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Aplicação",
+   "options": "Application",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Cliente",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "tipo",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tipo",
+   "options": "Correctiva\nPreventiva\nActualização",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_geral",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Total ou parcial",
+   "fieldname": "impacto",
+   "fieldtype": "Select",
+   "label": "Impacto",
+   "options": "Total\nTotal ou parcial\nParcial",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enviar_lembrete",
+   "fieldtype": "Check",
+   "label": "Enviar lembrete no dia"
+  },
+  {
+   "depends_on": "enviar_lembrete",
+   "fieldname": "lembrete",
+   "fieldtype": "HTML",
+   "label": "Hora do lembrete"
+  },
+  {
+   "default": "08:00:00",
+   "depends_on": "enviar_lembrete",
+   "fieldname": "hora_do_lembrete",
+   "fieldtype": "Time",
+   "label": "Hora do lembrete"
+  },
+  {
+   "fieldname": "section_janela",
+   "fieldtype": "Section Break",
+   "label": "Janela habitual"
+  },
+  {
+   "fieldname": "janela",
+   "fieldtype": "HTML",
+   "label": "Janela"
+  },
+  {
+   "default": "21:00:00",
+   "fieldname": "hora_inicio",
+   "fieldtype": "Time",
+   "label": "Hora de início",
+   "reqd": 1
+  },
+  {
+   "default": "04:00:00",
+   "description": "Antes da hora de início = no dia seguinte.",
+   "fieldname": "hora_fim",
+   "fieldtype": "Time",
+   "label": "Hora de fim",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.tipo==\"Preventiva\"",
+   "fieldname": "section_recorrencia",
+   "fieldtype": "Section Break",
+   "label": "Recorrência"
+  },
+  {
+   "description": "Em branco: sem repetição, as manutenções são criadas à mão.",
+   "fieldname": "periodicidade",
+   "fieldtype": "Select",
+   "label": "Periodicidade",
+   "options": "\nSemanal\nQuinzenal\nMensal\nBimestral\nTrimestral\nSemestral\nAnual"
+  },
+  {
+   "default": "Mesmo dia do mês",
+   "depends_on": "eval:doc.periodicidade && ![\"Semanal\", \"Quinzenal\"].includes(doc.periodicidade)",
+   "fieldname": "regra_mensal",
+   "fieldtype": "Select",
+   "label": "Repetir no",
+   "options": "Mesmo dia do mês\nMesmo dia da semana (ex.: 2ª terça-feira)"
+  },
+  {
+   "depends_on": "periodicidade",
+   "description": "As seguintes contam a partir desta data.",
+   "fieldname": "comeca_em",
+   "fieldtype": "Date",
+   "label": "Primeira manutenção",
+   "mandatory_depends_on": "periodicidade"
+  },
+  {
+   "default": "7",
+   "depends_on": "periodicidade",
+   "description": "A manutenção é criada estes dias antes; o aviso sai nesse dia se agendar automaticamente.",
+   "fieldname": "dias_de_antecedencia",
+   "fieldtype": "Int",
+   "label": "Criar com antecedência (dias)"
+  },
+  {
+   "default": "1",
+   "depends_on": "periodicidade",
+   "description": "Desligado: a manutenção fica em Rascunho para rever e agendar à mão.",
+   "fieldname": "agendar_automaticamente",
+   "fieldtype": "Check",
+   "label": "Agendar e enviar o aviso automaticamente"
+  },
+  {
+   "fieldname": "column_break_recorrencia",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "periodicidade",
+   "fieldname": "repete",
+   "fieldtype": "Data",
+   "label": "Repete",
+   "read_only": 1
+  },
+  {
+   "depends_on": "periodicidade",
+   "fieldname": "proxima_data",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Próxima manutenção",
+   "read_only": 1
+  },
+  {
+   "depends_on": "ultima_gerada",
+   "fieldname": "ultima_gerada",
+   "fieldtype": "Date",
+   "label": "Última criada para",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "ultima_manutencao",
+   "fieldname": "ultima_manutencao",
+   "fieldtype": "Link",
+   "label": "Última manutenção criada",
+   "no_copy": 1,
+   "options": "Manutencao Programada",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "description": "Deixe em branco quando a manutenção afecta todo o sistema (o caso habitual).",
+   "fieldname": "section_canais",
+   "fieldtype": "Section Break",
+   "label": "Canais"
+  },
+  {
+   "description": "Ex.: canal USSD (*511#)",
+   "fieldname": "canais_afectados",
+   "fieldtype": "Small Text",
+   "label": "Canais afectados"
+  },
+  {
+   "fieldname": "column_break_canais",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Ex.: canal WEB",
+   "fieldname": "canais_operacionais",
+   "fieldtype": "Small Text",
+   "label": "Canais que continuam operacionais"
+  },
+  {
+   "fieldname": "section_destinatarios",
+   "fieldtype": "Section Break",
+   "label": "Destinatários"
+  },
+  {
+   "fieldname": "destinatarios",
+   "fieldtype": "Table",
+   "label": "Para",
+   "options": "Destinatario de Manutencao"
+  },
+  {
+   "fieldname": "column_break_destinatarios",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "destinatarios_cc",
+   "fieldtype": "Table",
+   "label": "CC",
+   "options": "Destinatario de Manutencao"
+  }
+ ],
+ "links": [
+  {
+   "link_doctype": "Manutencao Programada",
+   "link_fieldname": "modelo"
+  }
+ ],
+ "modified": "2026-10-31 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Entre ERP",
+ "name": "Modelo de Manutencao",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Tech Lead",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "entretech suport",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Tech",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "sort_field": "titulo",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "titulo",
+ "track_changes": 1
+}

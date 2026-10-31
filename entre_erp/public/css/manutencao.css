@@ -1,0 +1,154 @@
+/* Header card of Manutenção Programada / Modelo de Manutenção (public/js/manutencao_cartao.js).
+   Only Frappe's theme variables, so it follows light and dark mode. --em-cor is the state colour. */
+
+.em-cartao {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px 18px 16px 22px;
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	background: var(--card-bg, var(--fg-color));
+	box-shadow: var(--shadow-sm, none);
+	overflow: hidden;
+	margin-bottom: 4px;
+}
+.em-cartao::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 4px;
+	background: var(--em-cor);
+}
+.em-mudo { color: var(--text-muted); font-weight: 400; }
+
+.em-topo { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.em-centro { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px; }
+.em-titulo { font-size: 18px; font-weight: 600; color: var(--heading-color, var(--text-color)); line-height: 1.3; }
+.em-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.em-quando { font-size: 14px; color: var(--text-color); }
+.em-conta { font-size: 13px; color: var(--text-muted); }
+.em-conta.agora { color: var(--orange-600, #c4620a); font-weight: 500; }
+.em-conta.alerta { color: var(--red-600, #c0392b); font-weight: 500; }
+.em-conta.ok { color: var(--green-600, #2d8a4e); }
+
+/* Calendar leaf */
+.em-folha {
+	flex: none;
+	width: 64px;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	overflow: hidden;
+	text-align: center;
+	background: var(--fg-color);
+}
+.em-folha span:first-child {
+	display: block;
+	padding: 2px 0;
+	background: var(--em-cor);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+}
+.em-folha b { display: block; font-size: 24px; line-height: 1.25; padding-top: 2px; color: var(--text-color); }
+.em-folha span:last-child { display: block; padding-bottom: 4px; font-size: 11px; color: var(--text-muted); }
+.em-folha.vazia span:first-child { background: var(--control-bg); }
+.em-folha.vazia b { color: var(--text-muted); }
+.em-folha.apagada { opacity: .6; transform: scale(.9); }
+
+/* Recipients */
+.em-pessoas { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.em-avatares { display: flex; padding-left: 6px; }
+.em-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	margin-left: -6px;
+	border-radius: 50%;
+	border: 2px solid var(--fg-color);
+	background: color-mix(in srgb, var(--em-cor) 18%, var(--control-bg));
+	color: var(--text-color);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: default;
+}
+.em-avatar.mais { background: var(--control-bg); color: var(--text-muted); }
+
+/* Rascunho → Agendada → Em Curso → Concluída */
+.em-passos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.em-passo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.em-bola {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 1.5px solid var(--border-color);
+	font-size: 11px;
+	background: var(--fg-color);
+}
+.em-passo.feito .em-bola { background: var(--em-cor); border-color: var(--em-cor); color: #fff; }
+.em-passo.actual { color: var(--text-color); font-weight: 600; }
+.em-passo.actual .em-bola {
+	border-color: var(--em-cor);
+	color: var(--em-cor);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--em-cor) 22%, transparent);
+}
+.em-traco { flex: 1; min-width: 16px; height: 2px; border-radius: 1px; background: var(--border-color); }
+.em-passos.cancelada { opacity: .45; }
+.em-passos.cancelada .em-passo { text-decoration: line-through; }
+
+/* Emails */
+.em-envios {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 10px;
+	padding-top: 12px;
+	border-top: 1px dashed var(--border-color);
+}
+.em-envio { display: flex; gap: 8px; align-items: center; }
+.em-envio b { display: block; font-size: 13px; font-weight: 600; color: var(--text-color); }
+.em-envio small { display: block; font-size: 12px; color: var(--text-muted); }
+.em-icone {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	background: var(--control-bg);
+	color: var(--text-muted);
+	font-size: 13px;
+}
+.em-envio.feito .em-icone {
+	background: color-mix(in srgb, var(--green-500, #2ca24c) 16%, transparent);
+	color: var(--green-600, #2d8a4e);
+	font-weight: 700;
+}
+
+.em-rodape { font-size: 12px; color: var(--text-muted); }
+.em-rodape a { color: var(--text-color); }
+
+/* Modelo: next dates */
+.em-proximas {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding-top: 12px;
+	border-top: 1px dashed var(--border-color);
+	font-size: 12px;
+}
+.em-rotulo { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+
+@media (max-width: 640px) {
+	.em-pessoas { align-items: flex-start; }
+	.em-traco { display: none; }
+}
