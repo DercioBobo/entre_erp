@@ -204,6 +204,9 @@ frappe.provide("entre_erp.manutencao");
 				<span class="em-mudo">${__("A próxima é criada a {0}{1}.", [frappe.datetime.str_to_user(criada), depois])}</span>
 			</div>`;
 		}
+		const ultima = doc.ultima_manutencao
+			? `<div class="em-rodape">${__("Última criada: {0}", [frappe.utils.get_form_link("Manutencao Programada", doc.ultima_manutencao, true)])}</div>`
+			: "";
 
 		$w.html(`
 			<div class="em-cartao" style="${cor_css(cor)}">
@@ -222,6 +225,7 @@ frappe.provide("entre_erp.manutencao");
 					${pessoas(doc)}
 				</div>
 				${proximas}
+				${ultima}
 			</div>`);
 	};
 

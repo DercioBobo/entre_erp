@@ -219,12 +219,11 @@
    "read_only": 1
   },
   {
-   "depends_on": "ultima_manutencao",
    "fieldname": "ultima_manutencao",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
+   "hidden": 1,
    "label": "Última manutenção criada",
    "no_copy": 1,
-   "options": "Manutencao Programada",
    "read_only": 1
   },
   {
@@ -272,12 +271,7 @@
    "options": "Destinatario de Manutencao"
   }
  ],
- "links": [
-  {
-   "link_doctype": "Manutencao Programada",
-   "link_fieldname": "modelo"
-  }
- ],
+ "links": [],
  "modified": "2026-10-31 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Entre ERP",
