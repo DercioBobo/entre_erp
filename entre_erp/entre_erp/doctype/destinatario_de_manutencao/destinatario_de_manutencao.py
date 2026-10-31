@@ -1,5 +1,5 @@
 from frappe.model.document import Document
 
 
-class DestinatarioDeManutencao(Document):
+class DestinatariodeManutencao(Document):
 	pass

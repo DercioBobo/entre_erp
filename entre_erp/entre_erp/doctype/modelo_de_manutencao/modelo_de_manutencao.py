@@ -12,7 +12,7 @@ from entre_erp.manutencao import (
 )
 
 
-class ModeloDeManutencao(Document):
+class ModelodeManutencao(Document):
 	def validate(self):
 		if self.tipo != PREVENTIVA:
 			self.periodicidade = None
