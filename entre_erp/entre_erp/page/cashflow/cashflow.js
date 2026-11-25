@@ -2282,15 +2282,17 @@ class CashflowSheet {
 			if (coluna.campo === "ativo") $tr.toggleClass("cf-inativo", !valor);
 			// Valor Padrão is the only money field, so it owns the whole formulas map.
 			const formula = coluna.tipo === "num" ? formula_da_celula($el) : null;
+			// frappe.client.set_value only reads `fieldname` as a dict of fields
+			// when `value` is empty — so send one or the other, never both.
+			const args =
+				coluna.tipo === "num"
+					? { fieldname: { [coluna.campo]: valor, formulas: formula ? JSON.stringify({ [coluna.campo]: formula }) : null } }
+					: { fieldname: coluna.campo, value: valor };
 			this.guardar(() =>
 				frappe.xcall("frappe.client.set_value", {
 					doctype: "Despesa Recorrente",
 					name: $tr.attr("data-name"),
-					fieldname:
-						coluna.tipo === "num"
-							? { [coluna.campo]: valor, formulas: formula ? JSON.stringify({ [coluna.campo]: formula }) : null }
-							: coluna.campo,
-					value: valor,
+					...args,
 				}),
 			);
 		});
