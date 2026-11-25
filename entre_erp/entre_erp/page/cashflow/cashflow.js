@@ -12,7 +12,7 @@ frappe.pages["cashflow"].on_page_load = function (wrapper) {
 // Pages are kept alive between visits, so a link from the Painel Financeiro
 // (frappe.route_options = { ano, mes }) is picked up here on every show.
 frappe.pages["cashflow"].on_page_show = function (wrapper) {
-	if (wrapper.cashflow) wrapper.cashflow.abrir_de_route_options();
+	if (wrapper.cashflow) wrapper.cashflow.ao_mostrar();
 };
 
 const API = "entre_erp.pagamentos.";
@@ -166,8 +166,18 @@ class CashflowSheet {
 			if (!$(e.currentTarget).hasClass("disabled")) this.executar_acao($(e.currentTarget).attr("data-acao"));
 		});
 		this.$body.on("click", ".cf-aba", (e) => this.abrir_aba($(e.currentTarget).attr("data-aba")));
+		// Other people's changes (entre_erp.pagamentos.avisar_alteracao).
+		frappe.realtime.on("cashflow_alterado", (d) => this.receber_alteracao(d));
 
 		this.carregar_ano();
+	}
+
+	// Page shown again (Frappe keeps it alive between visits).
+	ao_mostrar() {
+		const com_destino = !!(frappe.route_options && MESES.includes(frappe.route_options.mes));
+		this.abrir_de_route_options();
+		if (this.desatualizado && !com_destino) this.recarregar_aba();
+		this.desatualizado = false;
 	}
 
 	// ------------------------------------------------------------------
@@ -240,6 +250,7 @@ class CashflowSheet {
 		if (this.painel && !mesma_folha) this.fechar_painel();
 		this.aba = aba;
 		this.doc = null;
+		this.adiado = null; // a live refresh waiting for the old tab is moot now
 		this.$body.find(".cf-aba").removeClass("active").filter(`[data-aba="${aba}"]`).addClass("active");
 		this.$body.find(".cf-topo-acoes").empty();
 		this.render_menu_acoes();
@@ -251,7 +262,178 @@ class CashflowSheet {
 
 		const nome = nome_plano(this.ano, aba);
 		if (!this.planos[nome]) return this.render_sem_plano(aba);
-		frappe.xcall(API + "obter_plano", { plano: nome }).then((doc) => this.render_plano(doc));
+		return frappe.xcall(API + "obter_plano", { plano: nome }).then((doc) => {
+			if (this.aba === aba) this.render_plano(doc);
+		});
+	}
+
+	// ------------------------------------------------------------------
+	// Live updates: when someone else changes a plan, the Recorrentes or the
+	// Caixa, the open sheet follows without a reload. Cells only change where
+	// nobody is typing; a full redraw (lines added / removed, plan closed)
+	// waits until this person is not editing anything.
+	// ------------------------------------------------------------------
+
+	receber_alteracao(d) {
+		// Own saves already update this sheet.
+		if (!d || d.user === frappe.session.user) return;
+		if (d.alvo === "plano" && cint(d.ano) === this.ano) this.atualizar_aba_do_plano(d);
+		if (frappe.get_route()[0] !== "cashflow") {
+			this.desatualizado = true; // refreshed when the page is shown again
+			return;
+		}
+		// A burst (bulk edit, a move between plans) becomes a single refresh.
+		(this.alteracoes = this.alteracoes || []).push(d);
+		clearTimeout(this.t_alteracoes);
+		this.t_alteracoes = setTimeout(() => this.aplicar_alteracoes(), 400);
+	}
+
+	// Tab dot (pending / settled), and a plan created or deleted by someone else.
+	atualizar_aba_do_plano(d) {
+		if (d.apagado) {
+			delete this.planos[d.plano];
+		} else {
+			this.planos[d.plano] = {
+				...(this.planos[d.plano] || {}),
+				name: d.plano,
+				tipo: d.tipo,
+				mes: d.mes,
+				estado: d.estado,
+				total_previsto: d.total_previsto,
+				total_pago: d.total_pago,
+				total_remanescente: d.total_remanescente,
+			};
+		}
+		this.render_abas();
+	}
+
+	aplicar_alteracoes() {
+		const lista = this.alteracoes || [];
+		this.alteracoes = [];
+		const planos = lista.filter((d) => d.alvo === "plano" && cint(d.ano) === this.ano);
+		const quem = [...new Set(lista.map((d) => frappe.user.full_name(d.user)))].join(", ");
+		const avisar = (onde) =>
+			frappe.show_alert({ message: __("{0} alterou {1}", [esc(quem), esc(onde)]), indicator: "blue" }, 4);
+
+		const especial = {
+			[ABA_RESUMO]: planos.length > 0,
+			[ABA_RECORRENTES]: lista.some((d) => d.alvo === "recorrentes"),
+			[ABA_CAIXA]: lista.some((d) => d.alvo === "caixa"),
+		};
+		if (this.aba in especial) {
+			if (!especial[this.aba]) return;
+			avisar(this.titulo_para_documento());
+			return this.quando_livre(() => this.recarregar_aba());
+		}
+
+		const nome = nome_plano(this.ano, this.aba);
+		const deste = planos.filter((d) => d.plano === nome).pop();
+		// The Caixa balance chip on the month's Caixa line.
+		const caixa = lista.some((d) => d.alvo === "caixa") && this.doc && this.doc.caixa;
+		if (!deste && !caixa) return;
+		avisar(this.titulo_aba(this.aba));
+		if (!this.doc || (deste && deste.apagado)) return this.quando_livre(() => this.recarregar_aba());
+		this.refrescar_plano();
+	}
+
+	// After this person's own pending saves, so it never shows older values.
+	refrescar_plano(forcar = false) {
+		const nome = this.doc && this.doc.name;
+		if (!nome) return;
+		this.fila = this.fila
+			.then(() => frappe.xcall(API + "obter_plano", { plano: nome }))
+			.then((doc) => this.aplicar_plano_remoto(doc, forcar))
+			.catch(() => {});
+	}
+
+	aplicar_plano_remoto(doc, forcar) {
+		if (!this.doc || this.doc.name !== doc.name) return; // moved on meanwhile
+		const so_leitura = (p) => p.estado === "Fechado" || !!p.bloqueio;
+		const chave = (nomes) => nomes.slice().sort().join("|");
+		const $tbody = this.$conteudo.find(".cf-grelha tbody");
+		const na_grelha = $tbody.find("tr[data-name]").map((_i, tr) => tr.dataset.name).get();
+		const mesmas_linhas = chave(na_grelha) === chave(doc.linhas.map((l) => l.name));
+
+		if (!mesmas_linhas || so_leitura(this.doc) !== so_leitura(doc)) {
+			if (forcar || !this.ocupado()) {
+				const pos = this.ler_scroll();
+				this.render_plano(doc);
+				this.repor_scroll(pos);
+			} else {
+				this.quando_livre(() => this.refrescar_plano(true));
+			}
+			return;
+		}
+
+		// Same lines: update cells in place (the one being typed in is left alone).
+		const antes = {};
+		this.doc.linhas.forEach((l) => (antes[l.name] = l));
+		this.doc = doc;
+		const mudou = (a, b) => !a || COLUNAS_PLANO.some((c) => String(a[c.campo] ?? "") !== String(b[c.campo] ?? ""));
+		doc.linhas.forEach((linha) => {
+			const $tr = $tbody.find(`tr[data-name="${linha.name}"]`);
+			$tr.attr("data-idx", linha.idx);
+			this.atualizar_linha_na_grelha($tr, linha);
+			if (mudou(antes[linha.name], linha)) {
+				$tr.addClass("cf-destaque");
+				setTimeout(() => $tr.removeClass("cf-destaque"), 1600);
+			}
+		});
+		this.ordenar_grelha();
+		this.$body.find(".cf-estado-plano").val(doc.estado);
+		this.render_cabecalho(doc);
+		this.aplicar_filtros();
+		if (this.painel) {
+			const linha = doc.linhas.find((l) => l.name === this.painel.nome);
+			const em_foco = Object.keys(this.painel.controlos).find((campo) => {
+				const c = this.painel.controlos[campo];
+				return c.$input && c.$input.is(":focus");
+			});
+			if (linha) this.atualizar_painel(linha, em_foco);
+		}
+	}
+
+	// Typing, a menu or a dialog open: a redraw now would lose it.
+	ocupado() {
+		const el = document.activeElement;
+		if (el && this.$body[0].contains(el) && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return true;
+		if (this.$menu_filtro || this.$menu_link) return true;
+		return $(".modal:visible").length > 0;
+	}
+
+	quando_livre(fn) {
+		this.adiado = fn; // only the latest one matters
+		if (!this.t_adiado) this.t_adiado = setInterval(() => this.correr_adiado(), 800);
+		this.correr_adiado();
+	}
+
+	correr_adiado() {
+		if (this.adiado && this.ocupado()) return;
+		clearInterval(this.t_adiado);
+		this.t_adiado = null;
+		const fn = this.adiado;
+		this.adiado = null;
+		if (fn) fn();
+	}
+
+	recarregar_aba() {
+		const pos = this.ler_scroll();
+		return Promise.resolve(this.abrir_aba(this.aba)).then(() => this.repor_scroll(pos));
+	}
+
+	ler_scroll() {
+		return {
+			janela: window.scrollY,
+			grelhas: this.$conteudo.find(".cf-grelha-wrap").map((_i, el) => [[el.scrollTop, el.scrollLeft]]).get(),
+		};
+	}
+
+	repor_scroll(pos) {
+		this.$conteudo.find(".cf-grelha-wrap").each((i, el) => {
+			if (!pos.grelhas[i]) return;
+			[el.scrollTop, el.scrollLeft] = pos.grelhas[i];
+		});
+		window.scrollTo(0, pos.janela);
 	}
 
 	// ------------------------------------------------------------------
@@ -991,6 +1173,9 @@ class CashflowSheet {
 			frappe
 				.xcall(API + "atualizar_linha", { plano: this.doc.name, linha: nome, campo, valor, formula })
 				.then((r) => {
+					// Keep the loaded plan current, so live updates only flag other people's changes.
+					const i = this.doc ? this.doc.linhas.findIndex((l) => l.name === nome) : -1;
+					if (i >= 0) this.doc.linhas[i] = r.linha;
 					this.atualizar_linha_na_grelha(this.$conteudo.find(`tbody tr[data-name="${nome}"]`), r.linha);
 					this.ordenar_grelha(nome);
 					this.render_cabecalho(r.plano);
@@ -1884,7 +2069,7 @@ class CashflowSheet {
 	// ------------------------------------------------------------------
 
 	carregar_resumo() {
-		frappe.xcall(API + "resumo_anual", { ano: this.ano }).then((d) => this.render_resumo(d));
+		return frappe.xcall(API + "resumo_anual", { ano: this.ano }).then((d) => this.render_resumo(d));
 	}
 
 	render_resumo(d) {
@@ -1962,7 +2147,7 @@ class CashflowSheet {
 		const hoje = new Date();
 		this.caixa_ano = this.caixa_ano || hoje.getFullYear();
 		this.caixa_mes = this.caixa_mes || MESES[hoje.getMonth()];
-		frappe
+		return frappe
 			.xcall(API_CAIXA + "obter_caixa", { ano: this.caixa_ano, mes: this.caixa_mes })
 			.then((d) => this.render_caixa(d, focar));
 	}
@@ -2232,7 +2417,7 @@ class CashflowSheet {
 	// ------------------------------------------------------------------
 
 	carregar_recorrentes() {
-		frappe
+		return frappe
 			.xcall("frappe.client.get_list", {
 				doctype: "Despesa Recorrente",
 				fields: ["name", "formulas"].concat(COLUNAS_RECORRENTES.map((c) => c.campo)),

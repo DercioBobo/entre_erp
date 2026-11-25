@@ -181,6 +181,31 @@ def ligado(campo):
 	return _ligado(campo)
 
 
+def avisar_alteracao(alvo, **dados):
+	"""Tells every open Cashflow page that something changed, so other
+	people's sheets refresh without a reload. Sent only once the change is
+	committed (nothing goes out for a save that fails)."""
+	frappe.publish_realtime(
+		"cashflow_alterado", {"alvo": alvo, "user": frappe.session.user, **dados}, after_commit=True
+	)
+
+
+def avisar_plano(doc, apagado=False):
+	avisar_alteracao(
+		"plano",
+		plano=doc.name,
+		tipo=doc.tipo,
+		ano=doc.ano,
+		mes=doc.mes,
+		titulo=doc.titulo,
+		estado=doc.estado,
+		total_previsto=doc.total_previsto,
+		total_pago=doc.total_pago,
+		total_remanescente=doc.total_remanescente,
+		apagado=apagado,
+	)
+
+
 def valor_pago_da_linha(row):
 	if row.estado == ESTADO_PAGO and not flt(row.valor_pago):
 		return flt(row.valor)
@@ -363,6 +388,7 @@ def reordenar_linhas(plano, linhas):
 	for idx, row in enumerate(linhas_ordenadas, start=1):
 		if row.idx != idx:
 			frappe.db.set_value(row.doctype, row.name, "idx", idx, update_modified=False)
+	avisar_plano(doc)
 
 
 @frappe.whitelist()

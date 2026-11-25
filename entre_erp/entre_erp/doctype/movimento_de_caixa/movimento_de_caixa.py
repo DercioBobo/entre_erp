@@ -21,6 +21,9 @@ class MovimentodeCaixa(Document):
 						)
 					)
 
+	def on_update(self):
+		self._avisar()
+
 	def on_trash(self):
 		if self.plano and not self.flags.do_plano:
 			frappe.throw(
@@ -28,3 +31,10 @@ class MovimentodeCaixa(Document):
 					frappe.bold(self.plano)
 				)
 			)
+		self._avisar()
+
+	def _avisar(self):
+		"""Other people's Cashflow pages refresh their Caixa view."""
+		from entre_erp.pagamentos import avisar_alteracao
+
+		avisar_alteracao("caixa")

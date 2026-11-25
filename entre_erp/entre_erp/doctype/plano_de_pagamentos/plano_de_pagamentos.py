@@ -11,6 +11,7 @@ from entre_erp.pagamentos import (
 	ESTADO_PROXIMO_MES,
 	ESTADOS_FORA_DO_MES,
 	ESTADOS_INVESTIMENTO,
+	avisar_plano,
 	bloqueio_do_mes_anterior,
 	ligado,
 	linha_por_liquidar,
@@ -41,9 +42,11 @@ class PlanodePagamentos(Document):
 	def on_update(self):
 		self._sincronizar_proximo_mes()
 		sincronizar_reforcos(self)
+		avisar_plano(self)
 
 	def on_trash(self):
 		apagar_reforcos_do_plano(self)
+		avisar_plano(self, apagado=True)
 
 	# ------------------------------------------------------------------
 	# Buttons (plano_de_pagamentos.js)
